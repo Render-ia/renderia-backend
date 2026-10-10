@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -27,3 +27,21 @@ jobs:
 
       - name: Construir la imagen de Docker
         run: docker build -t renderia-backend .
+
+  deploy:
+    name: Desplegar en Render
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Avisar a Render que publique el último commit
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Falta el secreto RENDER_DEPLOY_HOOK; se omite el despliegue."
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK" > /dev/null
+          echo "Despliegue solicitado a Render."
