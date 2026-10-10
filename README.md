@@ -103,8 +103,4 @@ La API queda en `http://localhost:8080/api/v1/hello`.
 
 ## Despliegue
 
-Cada push a `main` corre el flujo de GitHub Actions (`.github/workflows/ci.yml`):
-
-1. Compila y corre las pruebas.
-2. Construye la imagen de Docker.
-3. Si todo pasa, avisa a Render con un Deploy Hook (secreto `RENDER_DEPLOY_HOOK`) y Render publica la nueva versión.
+Cada push a `main` corre el flujo de GitHub Actions (`.github/workflows/ci.yml`): compila, corre las pruebas y construye la imagen de Docker. Render está conectado al repositorio con **Auto-Deploy: After CI Checks Pass**, así que solo publica la nueva versión cuando el CI termina en verde.
