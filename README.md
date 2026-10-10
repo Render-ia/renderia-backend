@@ -27,7 +27,7 @@ El usuario usa el frontend, el frontend llama a esta API, la API guarda y lee en
 |---|---|
 | Lenguaje | Java 21 |
 | Framework | Spring Boot 4 (Web MVC, Data JPA, Security) |
-| Base de datos | PostgreSQL 16 en Neon |
+| Base de datos | PostgreSQL en Neon |
 | Autenticación | JWT firmado con HS256 y contraseñas cifradas con BCrypt |
 | Contenedor | Docker (imagen multi-etapa) |
 | CI/CD | GitHub Actions: compila, prueba, construye la imagen y despliega en Render |
