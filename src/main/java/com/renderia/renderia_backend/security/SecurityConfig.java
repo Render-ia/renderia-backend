@@ -27,7 +27,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Reglas de acceso de la API:
- * - Públicas: hello, health, login, registro y la lectura de catálogos.
+ * - Públicas: hello, health, login, registro, la lectura de catálogos y las imágenes de los planos.
  * - Solo administrador: crear, editar o borrar catálogos y modelos de IA.
  * - Todo lo demás exige un token válido (Authorization: Bearer ...).
  */
@@ -52,6 +52,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/roles").permitAll()
                 .requestMatchers(HttpMethod.GET, CATALOGS).permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/floor-plans/*/image").permitAll()
                 .requestMatchers(CATALOGS).hasRole("ADMINISTRADOR")
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth -> oauth
