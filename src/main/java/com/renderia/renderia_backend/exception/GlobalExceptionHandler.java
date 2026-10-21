@@ -40,6 +40,7 @@ public class GlobalExceptionHandler {
         }
         log.error("Error inesperado", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("message", "Error interno del servidor: " + e.getClass().getSimpleName()));
+                .body(Map.of("message", "Error interno del servidor: " + e.getClass().getSimpleName()
+                        + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")")));
     }
 }

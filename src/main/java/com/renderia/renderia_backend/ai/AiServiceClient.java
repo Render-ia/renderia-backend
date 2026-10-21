@@ -41,10 +41,23 @@ public class AiServiceClient {
         // En el plan gratis el servicio puede tardar en despertar.
         factory.setReadTimeout(120_000);
         this.client = RestClient.builder()
-                .baseUrl(url.replaceAll("/+$", ""))
+                .baseUrl(normalizeUrl(url))
                 .requestFactory(factory)
                 .build();
-        this.apiKey = apiKey;
+        // Quita espacios y saltos de línea que suelen colarse al pegar la clave.
+        this.apiKey = apiKey == null ? "" : apiKey.replaceAll("\\s", "");
+    }
+
+    /** Acepta la URL con o sin https:// y sin espacios ni barra final. */
+    static String normalizeUrl(String url) {
+        String clean = url == null ? "" : url.replaceAll("\\s", "").replaceAll("/+$", "");
+        if (clean.isEmpty()) {
+            return "http://localhost:8000";
+        }
+        if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+            clean = "https://" + clean;
+        }
+        return clean;
     }
 
     public AiServiceResponse analyze(String imageUrl, String scale, String provider, String modelIdentifier) {
