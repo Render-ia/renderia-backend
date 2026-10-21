@@ -107,9 +107,7 @@ public class FloorPlanService {
 
     @Transactional
     public void delete(CurrentUser user, Long id) {
-        FloorPlan plan = findVisible(user, id);
-        projectService.findManageable(user, plan.getProjectId());
-        plans.delete(plan);
+        plans.delete(findManageable(user, id));
     }
 
     /** Imagen del plano, para mostrarla en el navegador y para que la IA la analice. */
@@ -118,10 +116,18 @@ public class FloorPlanService {
         return files.findById(id).orElseThrow(() -> ApiException.notFound("El plano no tiene imagen."));
     }
 
-    private FloorPlan findVisible(CurrentUser user, Long id) {
+    /** Plano que el usuario puede ver (el de un proyecto visible); si no, 404. */
+    public FloorPlan findVisible(CurrentUser user, Long id) {
         FloorPlan plan = plans.findById(id)
                 .orElseThrow(() -> ApiException.notFound("El plano no existe o no tienes acceso a él."));
         projectService.findVisible(user, plan.getProjectId());
+        return plan;
+    }
+
+    /** Plano que el usuario puede modificar o analizar (el de un proyecto que puede gestionar). */
+    public FloorPlan findManageable(CurrentUser user, Long id) {
+        FloorPlan plan = findVisible(user, id);
+        projectService.findManageable(user, plan.getProjectId());
         return plan;
     }
 
