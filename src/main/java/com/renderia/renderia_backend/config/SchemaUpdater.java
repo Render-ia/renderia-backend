@@ -26,6 +26,17 @@ public class SchemaUpdater implements ApplicationRunner {
             content_type  VARCHAR(50) NOT NULL,
             data          BYTEA       NOT NULL
         )
+        """,
+        // 002: modelo de visión local del servicio de IA. Solo la primera vez queda como predeterminado.
+        """
+        WITH inserted AS (
+            INSERT INTO ai_models (name, provider, model_identifier, is_active, is_default)
+            VALUES ('Detector de visión local', 'local-vision', 'renderia-vision-v1', TRUE, FALSE)
+            ON CONFLICT (model_identifier) DO NOTHING
+            RETURNING id
+        )
+        UPDATE ai_models SET is_default = (id IN (SELECT id FROM inserted))
+        WHERE EXISTS (SELECT 1 FROM inserted)
         """
     };
 
