@@ -85,6 +85,7 @@ Ninguna clave se guarda en el repositorio. En Render se configuran estas variabl
 | `DB_USERNAME`, `DB_PASSWORD` | Credenciales de la base de datos |
 | `JWT_SECRET` | Clave para firmar los tokens (mínimo 32 caracteres) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Crean la primera cuenta de administrador al arrancar |
+| `DEMO_ENGINEER_PASSWORD`, `DEMO_STUDENT_PASSWORD` | Crean las cuentas de prueba `ingeniero@renderia.co` y `estudiante@renderia.co` (opcional) |
 | `FRONTEND_URL` | Dominios con permiso CORS (opcional; por defecto Vercel y `localhost:5173`) |
 
 ## Cómo ejecutarlo
