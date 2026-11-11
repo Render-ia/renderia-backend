@@ -3,6 +3,7 @@ package com.renderia.renderia_backend.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import com.renderia.renderia_backend.model.Role;
@@ -15,6 +16,7 @@ import com.renderia.renderia_backend.model.Role;
  * podría gestionar usuarios y catálogos.
  */
 @Component
+@Order(10)
 public class DemoAccountsInitializer implements ApplicationRunner {
 
     public static final String ENGINEER_EMAIL = "ingeniero@renderia.co";
