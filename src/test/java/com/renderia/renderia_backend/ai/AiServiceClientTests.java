@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 class AiServiceClientTests {
 
     @Test
-    void normalizaLaUrlDelServicioDeIa() {
+    void normalizesAiServiceUrl() {
         assertEquals("https://renderia-ai.onrender.com", AiServiceClient.normalizeUrl(" renderia-ai.onrender.com/\n"));
         assertEquals("https://renderia-ai.onrender.com", AiServiceClient.normalizeUrl("https://renderia-ai.onrender.com/"));
         assertEquals("http://localhost:8000", AiServiceClient.normalizeUrl("http://localhost:8000"));
