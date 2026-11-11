@@ -26,6 +26,9 @@ public class FloorPlanService {
 
     private static final Set<String> ALLOWED_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/svg+xml");
     private static final Pattern SCALE = Pattern.compile("^1:\\d{1,5}$");
+    /** Los números negativos son sótanos, igual que en el formulario del frontend. */
+    private static final int MIN_FLOOR_LEVEL = -5;
+    private static final int MAX_FLOOR_LEVEL = 200;
 
     private final FloorPlanRepository plans;
     private final FloorPlanFileRepository files;
@@ -81,8 +84,8 @@ public class FloorPlanService {
         if (contentType == null || !ALLOWED_TYPES.contains(contentType)) {
             throw ApiException.badRequest("Formato no válido. Sube el plano en PNG, JPG, WEBP o SVG.");
         }
-        if (floorLevel == null || floorLevel < 1 || floorLevel > 200) {
-            throw ApiException.badRequest("El piso debe ser un número entre 1 y 200.");
+        if (floorLevel == null || floorLevel < MIN_FLOOR_LEVEL || floorLevel > MAX_FLOOR_LEVEL) {
+            throw ApiException.badRequest("El piso debe ser un número entre " + MIN_FLOOR_LEVEL + " y " + MAX_FLOOR_LEVEL + ".");
         }
         if (scale == null || !SCALE.matcher(scale.trim()).matches()) {
             throw ApiException.badRequest("La escala debe escribirse como 1:100.");
