@@ -60,6 +60,10 @@ public class AiServiceClient {
         return clean;
     }
 
+    /** Intentos ante errores de la plataforma (servicio despertando o reiniciándose). */
+    private static final int MAX_ATTEMPTS = 3;
+    private static final long RETRY_WAIT_MS = 8_000;
+
     public AiServiceResponse analyze(String imageUrl, String scale, String provider, String modelIdentifier) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("imageUrl", imageUrl);
@@ -67,6 +71,22 @@ public class AiServiceClient {
         body.put("provider", provider);
         body.put("modelIdentifier", modelIdentifier);
 
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return send(body);
+            } catch (PlatformUnavailableException e) {
+                if (attempt >= MAX_ATTEMPTS) {
+                    throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
+                            "El servicio de IA no está disponible (código " + e.statusCode
+                                    + "). Si estaba dormido, espera un minuto e inténtalo de nuevo.");
+                }
+                log.warn("El servicio de IA respondió {} sin mensaje; reintento {} de {}", e.statusCode, attempt + 1, MAX_ATTEMPTS);
+                waitBeforeRetry();
+            }
+        }
+    }
+
+    private AiServiceResponse send(Map<String, Object> body) {
         try {
             AiServiceResponse response = client.post()
                     .uri("/analyze")
@@ -76,8 +96,17 @@ public class AiServiceClient {
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, res) -> {
                         String text = new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8);
-                        log.warn("El servicio de IA respondió {}: {}", res.getStatusCode(), text);
-                        throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, messageOf(text));
+                        int code = res.getStatusCode().value();
+                        log.warn("El servicio de IA respondió {}: {}", code, abbreviate(text));
+                        Matcher matcher = MESSAGE.matcher(text);
+                        if (matcher.find()) {
+                            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, matcher.group(1).replace("\\\"", "\""));
+                        }
+                        if (code == 502 || code == 503 || code == 504) {
+                            throw new PlatformUnavailableException(code);
+                        }
+                        throw new ApiException(HttpStatus.BAD_GATEWAY,
+                                "El servicio de IA no pudo analizar el plano (código " + code + ").");
                     })
                     .body(AiServiceResponse.class);
             if (response == null || response.elements() == null) {
@@ -92,17 +121,35 @@ public class AiServiceClient {
             if (e.getCause() instanceof ApiException apiException) {
                 throw apiException;
             }
+            if (e.getCause() instanceof PlatformUnavailableException unavailable) {
+                throw unavailable;
+            }
             log.error("Respuesta inesperada del servicio de IA", e);
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "La respuesta del servicio de IA no se pudo leer: " + e.getMostSpecificCause().getMessage());
         }
     }
 
-    private static String messageOf(String body) {
-        Matcher matcher = MESSAGE.matcher(body);
-        if (matcher.find()) {
-            return matcher.group(1).replace("\\\"", "\"");
+    private static void waitBeforeRetry() {
+        try {
+            Thread.sleep(RETRY_WAIT_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Se canceló la espera del servicio de IA.");
         }
-        return "El servicio de IA no pudo analizar el plano.";
+    }
+
+    private static String abbreviate(String text) {
+        return text.length() > 300 ? text.substring(0, 300) + "…" : text;
+    }
+
+    /** Error de la plataforma de despliegue (no del análisis): vale la pena reintentar. */
+    private static final class PlatformUnavailableException extends RuntimeException {
+        private final int statusCode;
+
+        PlatformUnavailableException(int statusCode) {
+            super("El servicio de IA respondió " + statusCode);
+            this.statusCode = statusCode;
+        }
     }
 }
