@@ -14,10 +14,10 @@ public class HelloController {
     @GetMapping("/hello")
     public Map<String, Object> hello() {
         return Map.of(
-            "proyecto", "Render.IA",
-            "descripcion", "IA que convierte planos 2D en modelos estructurales 3D",
-            "integrantes", List.of("Juan David Moreno", "Felipe Cerón"),
-            "mensaje", "Hola mundo desde el backend"
+            "project", "Render.IA",
+            "description", "IA que convierte planos 2D en modelos estructurales 3D",
+            "members", List.of("Juan David Moreno", "Felipe Cerón"),
+            "message", "Hola mundo desde el backend"
         );
     }
 }
