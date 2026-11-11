@@ -7,6 +7,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.CatalogItemRequest;
 import com.renderia.renderia_backend.dto.CatalogItemResponse;
 import com.renderia.renderia_backend.exception.ApiException;
@@ -70,11 +71,11 @@ public abstract class CatalogService<T extends CatalogEntity> {
     }
 
     private void apply(T entity, CatalogItemRequest request) {
-        if (request == null || request.name() == null || request.name().isBlank()) {
-            throw ApiException.badRequest("El nombre es obligatorio.");
+        if (request == null) {
+            throw ApiException.badRequest("Envía el nombre y la descripción.");
         }
-        entity.setName(request.name().trim());
-        entity.setDescription(request.description() == null ? null : request.description().trim());
+        entity.setName(InputValidator.requiredText(request.name(), "El nombre", 80));
+        entity.setDescription(InputValidator.optionalText(request.description(), "La descripción", 255));
     }
 
     private T save(T entity) {

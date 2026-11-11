@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.AuthResponse;
 import com.renderia.renderia_backend.dto.LoginRequest;
 import com.renderia.renderia_backend.dto.RegisterRequest;
@@ -26,6 +27,8 @@ public class AuthService {
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Set<String> SELF_REGISTER_ROLES = Set.of(Role.ENGINEER, Role.STUDENT);
     private static final int MIN_PASSWORD_LENGTH = 8;
+    /** BCrypt solo tiene en cuenta los primeros 72 bytes de la contraseña. */
+    private static final int MAX_PASSWORD_LENGTH = 72;
 
     private final UserRepository users;
     private final RoleRepository roles;
@@ -42,15 +45,19 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (request == null || isBlank(request.fullName())) {
-            throw ApiException.badRequest("El nombre completo es obligatorio.");
+        if (request == null) {
+            throw ApiException.badRequest("Envía los datos del registro.");
         }
-        String email = normalizeEmail(request.email());
+        String fullName = InputValidator.requiredText(request.fullName(), "El nombre completo", 120);
+        String email = InputValidator.requiredText(normalizeEmail(request.email()), "El correo", 150);
         if (!EMAIL.matcher(email).matches()) {
             throw ApiException.badRequest("El correo no es válido.");
         }
         if (request.password() == null || request.password().length() < MIN_PASSWORD_LENGTH) {
             throw ApiException.badRequest("La contraseña debe tener al menos " + MIN_PASSWORD_LENGTH + " caracteres.");
+        }
+        if (request.password().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_PASSWORD_LENGTH) {
+            throw ApiException.badRequest("La contraseña admite máximo " + MAX_PASSWORD_LENGTH + " caracteres.");
         }
         Role role = roles.findById(request.roleId() == null ? -1L : request.roleId())
                 .filter(r -> SELF_REGISTER_ROLES.contains(r.getName()))
@@ -60,7 +67,7 @@ public class AuthService {
         }
 
         User user = new User();
-        user.setFullName(request.fullName().trim());
+        user.setFullName(fullName);
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(role);
@@ -97,7 +104,4 @@ public class AuthService {
         return email == null ? "" : email.trim().toLowerCase();
     }
 
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
 }

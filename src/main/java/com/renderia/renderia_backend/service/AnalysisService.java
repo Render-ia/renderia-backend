@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.AnalysisResponse;
 import com.renderia.renderia_backend.dto.AnalysisUpdateRequest;
 import com.renderia.renderia_backend.dto.ElementInput;
@@ -93,7 +94,7 @@ public class AnalysisService {
             analysis.setRawResponse(request.rawResponse());
         }
         if (request.errorMessage() != null) {
-            analysis.setErrorMessage(request.errorMessage());
+            analysis.setErrorMessage(InputValidator.optionalText(request.errorMessage(), "El mensaje de error", 2000));
         }
         if (request.durationMs() != null) {
             analysis.setDurationMs(Math.max(0, request.durationMs()));

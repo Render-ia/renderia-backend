@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.ActivityRequest;
 import com.renderia.renderia_backend.dto.ActivityResponse;
 import com.renderia.renderia_backend.exception.ApiException;
@@ -51,9 +52,11 @@ public class ActivityLogService {
 
     @Transactional
     public ActivityResponse create(CurrentUser user, ActivityRequest request) {
-        if (request == null || request.action() == null || request.action().isBlank()) {
-            throw ApiException.badRequest("La acción es obligatoria.");
+        if (request == null) {
+            throw ApiException.badRequest("Envía la acción.");
         }
-        return record(user.id(), request.action().trim(), request.details());
+        String action = InputValidator.requiredText(request.action(), "La acción", 100);
+        String details = InputValidator.optionalText(request.details(), "El detalle", 2000);
+        return record(user.id(), action, details);
     }
 }

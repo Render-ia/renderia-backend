@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.ProjectRequest;
 import com.renderia.renderia_backend.dto.ProjectResponse;
 import com.renderia.renderia_backend.exception.ApiException;
@@ -98,19 +99,15 @@ public class ProjectService {
     }
 
     private void apply(Project project, ProjectRequest request) {
-        if (request == null || request.name() == null || request.name().isBlank()) {
-            throw ApiException.badRequest("El nombre del proyecto es obligatorio.");
+        if (request == null) {
+            throw ApiException.badRequest("Envía los datos del proyecto.");
         }
         if (request.buildingTypeId() != null && !buildingTypes.existsById(request.buildingTypeId())) {
             throw ApiException.badRequest("El tipo de edificación no existe.");
         }
-        project.setName(request.name().trim());
-        project.setDescription(trimOrNull(request.description()));
-        project.setLocation(trimOrNull(request.location()));
+        project.setName(InputValidator.requiredText(request.name(), "El nombre del proyecto", 150));
+        project.setDescription(InputValidator.optionalText(request.description(), "La descripción", 2000));
+        project.setLocation(InputValidator.optionalText(request.location(), "La ubicación", 150));
         project.setBuildingTypeId(request.buildingTypeId());
-    }
-
-    private static String trimOrNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 }
