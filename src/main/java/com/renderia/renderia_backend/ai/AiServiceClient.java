@@ -33,7 +33,10 @@ public class AiServiceClient {
     private static final Pattern MESSAGE = Pattern.compile("\"message\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     private final RestClient client;
+    private final RestClient healthClient;
     private final String apiKey;
+    /** Última vez que el servicio de IA respondió /health (para no despertarlo en cada análisis). */
+    private volatile long lastHealthyAt;
 
     public AiServiceClient(@Value("${app.ai.url}") String url, @Value("${app.ai.api-key}") String apiKey) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -43,6 +46,13 @@ public class AiServiceClient {
         this.client = RestClient.builder()
                 .baseUrl(normalizeUrl(url))
                 .requestFactory(factory)
+                .build();
+        SimpleClientHttpRequestFactory healthFactory = new SimpleClientHttpRequestFactory();
+        healthFactory.setConnectTimeout(10_000);
+        healthFactory.setReadTimeout(70_000);
+        this.healthClient = RestClient.builder()
+                .baseUrl(normalizeUrl(url))
+                .requestFactory(healthFactory)
                 .build();
         // Quita espacios y saltos de línea que suelen colarse al pegar la clave.
         this.apiKey = apiKey == null ? "" : apiKey.replaceAll("\\s", "");
@@ -62,7 +72,10 @@ public class AiServiceClient {
 
     /** Intentos ante errores de la plataforma (servicio despertando o reiniciándose). */
     private static final int MAX_ATTEMPTS = 3;
-    private static final long RETRY_WAIT_MS = 8_000;
+    private static final long RETRY_WAIT_MS = 10_000;
+    /** Intentos para despertar el servicio antes de mandarle el plano (unos 2 minutos en total). */
+    private static final int WAKE_UP_ATTEMPTS = 6;
+    private static final long HEALTHY_FOR_MS = 5 * 60_000;
 
     public AiServiceResponse analyze(String imageUrl, String scale, String provider, String modelIdentifier) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -71,19 +84,53 @@ public class AiServiceClient {
         body.put("provider", provider);
         body.put("modelIdentifier", modelIdentifier);
 
+        wakeUpIfNeeded();
         for (int attempt = 1; ; attempt++) {
             try {
-                return send(body);
+                AiServiceResponse response = send(body);
+                lastHealthyAt = System.currentTimeMillis();
+                return response;
             } catch (PlatformUnavailableException e) {
                 if (attempt >= MAX_ATTEMPTS) {
                     throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                             "El servicio de IA no está disponible (código " + e.statusCode
-                                    + "). Si estaba dormido, espera un minuto e inténtalo de nuevo.");
+                                    + "). Está despertando: espera un minuto e inténtalo de nuevo.");
                 }
                 log.warn("El servicio de IA respondió {} sin mensaje; reintento {} de {}", e.statusCode, attempt + 1, MAX_ATTEMPTS);
                 waitBeforeRetry();
             }
         }
+    }
+
+    /**
+     * Consulta /health del servicio de IA. En el plan gratis de Render el servicio se
+     * duerme tras 15 minutos sin tráfico y, mientras despierta, Render puede responder
+     * 429 o 503 en lugar de esperar; por eso se despierta antes de mandarle el plano.
+     */
+    public boolean ping() {
+        try {
+            healthClient.get().uri("/health").retrieve().toBodilessEntity();
+            lastHealthyAt = System.currentTimeMillis();
+            return true;
+        } catch (RestClientException e) {
+            log.info("El servicio de IA todavía no responde /health: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void wakeUpIfNeeded() {
+        if (System.currentTimeMillis() - lastHealthyAt < HEALTHY_FOR_MS) {
+            return;
+        }
+        for (int attempt = 1; attempt <= WAKE_UP_ATTEMPTS; attempt++) {
+            if (ping()) {
+                return;
+            }
+            if (attempt < WAKE_UP_ATTEMPTS) {
+                waitBeforeRetry();
+            }
+        }
+        log.warn("El servicio de IA no despertó; se intenta el análisis de todos modos");
     }
 
     private AiServiceResponse send(Map<String, Object> body) {
@@ -102,7 +149,7 @@ public class AiServiceClient {
                         if (matcher.find()) {
                             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, matcher.group(1).replace("\\\"", "\""));
                         }
-                        if (code == 502 || code == 503 || code == 504) {
+                        if (code == 429 || code == 502 || code == 503 || code == 504) {
                             throw new PlatformUnavailableException(code);
                         }
                         throw new ApiException(HttpStatus.BAD_GATEWAY,
