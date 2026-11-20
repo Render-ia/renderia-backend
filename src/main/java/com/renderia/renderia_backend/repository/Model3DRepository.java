@@ -20,7 +20,8 @@ public interface Model3DRepository extends JpaRepository<Model3D, Long> {
             SELECT m FROM Model3D m
             WHERE m.floorPlanId IN (
                 SELECT f.id FROM FloorPlan f WHERE f.projectId IN (
-                    SELECT p.id FROM Project p WHERE p.userId = :userId))
+                    SELECT p.id FROM Project p WHERE p.userId = :userId
+                    OR p.id IN (SELECT m.projectId FROM ProjectMember m WHERE m.userId = :userId)))
             ORDER BY m.createdAt DESC
             """)
     List<Model3D> findAllOfUser(@Param("userId") Long userId);

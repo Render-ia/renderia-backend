@@ -53,10 +53,10 @@ public class FloorPlanService {
         if (user.policy().canViewAllProjects()) {
             result = plans.findAllByOrderByUploadedAtDesc();
         } else {
-            List<Long> own = projects.findAllByUserIdOrderByCreatedAtDesc(user.id()).stream()
+            List<Long> accessible = projects.findAccessible(user.id()).stream()
                     .map(Project::getId)
                     .toList();
-            result = own.isEmpty() ? List.of() : plans.findAllByProjectIdInOrderByUploadedAtDesc(own);
+            result = accessible.isEmpty() ? List.of() : plans.findAllByProjectIdInOrderByUploadedAtDesc(accessible);
         }
         return result.stream().map(FloorPlanResponse::from).toList();
     }
