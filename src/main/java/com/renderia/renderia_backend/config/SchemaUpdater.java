@@ -69,7 +69,13 @@ public class SchemaUpdater implements ApplicationRunner {
             UNIQUE (project_id, user_id)
         )
         """,
-        "CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON project_members(user_id)"
+        "CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON project_members(user_id)",
+        // 007: geometric detector checked by Gemini (falls back to the detector alone without a key).
+        """
+        INSERT INTO ai_models (name, provider, model_identifier, is_active, is_default)
+        VALUES ('Detector de visión + Gemini', 'gemini', 'gemini:flash', TRUE, FALSE)
+        ON CONFLICT (model_identifier) DO NOTHING
+        """
     };
 
     private final JdbcTemplate jdbc;

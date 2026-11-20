@@ -80,6 +80,19 @@ class CopilotServiceTests {
     }
 
     @Test
+    void aRenderTheAiCouldNotMakeDoesNotSpendTheDailyLimit() {
+        when(analyses.findVisible(engineer, 1L)).thenReturn(new AiAnalysis());
+        when(ai.postJson(eq("/render"), any()))
+                .thenThrow(new ApiException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Gemini no responde"))
+                .thenReturn(Map.of("mimeType", "image/png"));
+
+        assertThatThrownBy(() -> service.render(engineer, 1L, new RenderRequest("aGVsbG8=", "modern", "exterior", null)))
+                .hasMessageContaining("Gemini no responde");
+        // The limit is 1 per day: the failed attempt was given back, so this one still works.
+        service.render(engineer, 1L, new RenderRequest("aGVsbG8=", "modern", "exterior", null));
+    }
+
+    @Test
     void keepsOnlyTheLastMessagesOfTheConversation() {
         List<CopilotRequest.Message> messages = new ArrayList<>();
         for (int i = 0; i < 15; i++) {

@@ -9,4 +9,6 @@ import com.renderia.renderia_backend.model.StructuralElement;
 public interface StructuralElementRepository extends JpaRepository<StructuralElement, Long> {
 
     List<StructuralElement> findAllByAiAnalysisIdOrderByIdAsc(Long aiAnalysisId);
+
+    long countByAiAnalysisId(Long aiAnalysisId);
 }

@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.AnalysisSummary;
 import com.renderia.renderia_backend.validation.ElementMeasures;
 import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.AnalysisResponse;
@@ -31,6 +32,11 @@ import com.renderia.renderia_backend.security.CurrentUser;
 /** Análisis de IA y los elementos que encontraron, con los permisos del proyecto del plano. */
 @Service
 public class AnalysisService {
+
+    /** A real plan gives a few hundred elements; this keeps one analysis from filling the database. */
+    static final int MAX_ELEMENTS_PER_ANALYSIS = 2000;
+    /** Coordinates are meters on the plan; 100 km is far beyond any building. */
+    static final double MAX_COORDINATE = 100_000;
 
     private final AiAnalysisRepository analyses;
     private final StructuralElementRepository elements;
@@ -96,7 +102,7 @@ public class AnalysisService {
             }
         }
         if (request.rawResponse() != null) {
-            analysis.setRawResponse(request.rawResponse());
+            analysis.setRawResponse(AnalysisSummary.fromClient(request.rawResponse(), analysis.getRawResponse()));
         }
         if (request.errorMessage() != null) {
             analysis.setErrorMessage(InputValidator.optionalText(request.errorMessage(), "El mensaje de error", 2000));
@@ -127,10 +133,16 @@ public class AnalysisService {
         if (inputs == null) {
             throw ApiException.badRequest("Envía la lista de elementos.");
         }
+        if (elements.countByAiAnalysisId(analysisId) + inputs.size() > MAX_ELEMENTS_PER_ANALYSIS) {
+            throw ApiException.badRequest("Un análisis admite máximo " + MAX_ELEMENTS_PER_ANALYSIS + " elementos.");
+        }
         Set<Long> typeIds = ids(elementTypes.findAll());
         Set<Long> materialIds = ids(materials.findAll());
 
         List<StructuralElement> rows = inputs.stream().map(input -> {
+            if (input == null) {
+                throw ApiException.badRequest("Hay un elemento vacío en la lista.");
+            }
             if (input.elementTypeId() == null || !typeIds.contains(input.elementTypeId())) {
                 throw ApiException.badRequest("Hay un elemento con un tipo que no existe.");
             }
@@ -144,13 +156,13 @@ public class AnalysisService {
             e.setAiAnalysisId(analysisId);
             e.setElementTypeId(input.elementTypeId());
             e.setMaterialId(input.materialId());
-            e.setStartX(input.startX());
-            e.setStartY(input.startY());
-            e.setEndX(input.endX());
-            e.setEndY(input.endY());
-            e.setWidth(input.width());
-            e.setHeight(input.height());
-            e.setThickness(input.thickness());
+            e.setStartX(coordinate(input.startX()));
+            e.setStartY(coordinate(input.startY()));
+            e.setEndX(coordinate(input.endX()));
+            e.setEndY(coordinate(input.endY()));
+            e.setWidth(detectedMeasure(input.width(), "El ancho"));
+            e.setHeight(detectedMeasure(input.height(), "La altura"));
+            e.setThickness(detectedMeasure(input.thickness(), "El espesor"));
             e.setConfidence(input.confidence() == null ? null : Math.min(1, Math.max(0, input.confidence())));
             return e;
         }).toList();
@@ -214,6 +226,27 @@ public class AnalysisService {
             throw ApiException.badRequest("El modelo de IA \"" + model.getName() + "\" está desactivado.");
         }
         return model;
+    }
+
+    static Double coordinate(Double value) {
+        if (value == null) {
+            return null;
+        }
+        if (!Double.isFinite(value) || Math.abs(value) > MAX_COORDINATE) {
+            throw ApiException.badRequest("Hay un elemento con coordenadas fuera del plano.");
+        }
+        return value;
+    }
+
+    /** A detected measure of 0 means "unknown"; negative or absurd values are rejected. */
+    static Double detectedMeasure(Double value, String label) {
+        if (value == null || value == 0) {
+            return null;
+        }
+        if (value > 0 && value < ElementMeasures.MIN_METERS) {
+            return ElementMeasures.MIN_METERS;
+        }
+        return ElementMeasures.parse(value, label);
     }
 
     private static AnalysisStatus parseStatus(String value) {

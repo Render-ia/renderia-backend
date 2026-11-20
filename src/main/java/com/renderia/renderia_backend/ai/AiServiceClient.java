@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
@@ -203,6 +204,10 @@ public class AiServiceClient {
             log.warn("No se pudo conectar con el servicio de IA: {}", e.getMessage());
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                     "El servicio de IA no responde. Si estaba dormido, espera un minuto e inténtalo de nuevo.");
+        } catch (HttpMessageConversionException e) {
+            // The AI service closed the connection while receiving or answering (usually a body it refused).
+            log.warn("El servicio de IA cortó la conexión: {}", e.getMessage());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, failure + ": la petición no se pudo completar.");
         } catch (RestClientException e) {
             if (e.getCause() instanceof ApiException apiException) {
                 throw apiException;
@@ -211,8 +216,7 @@ public class AiServiceClient {
                 throw unavailable;
             }
             log.error("Respuesta inesperada del servicio de IA", e);
-            throw new ApiException(HttpStatus.BAD_GATEWAY,
-                    "La respuesta del servicio de IA no se pudo leer: " + e.getMostSpecificCause().getMessage());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "La respuesta del servicio de IA no se pudo leer.");
         }
     }
 

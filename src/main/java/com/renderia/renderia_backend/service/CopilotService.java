@@ -42,6 +42,8 @@ public class CopilotService {
     static final int MAX_MESSAGE = 2000;
     static final int MAX_QUANTITIES = 30;
     static final int MAX_NOTES = 300;
+    /** The AI service reads at most 600 elements; sending more only makes the request heavier. */
+    static final int MAX_CONTEXT_ELEMENTS = 600;
     /** About 4.5 MB of image once decoded; the AI service checks the real type and size again. */
     static final int MAX_IMAGE_CHARS = 6_200_000;
     static final Set<String> STYLES = Set.of("modern", "tropical", "rustic", "contemporary", "minimalist", "traditional");
@@ -103,7 +105,7 @@ public class CopilotService {
         body.put("depth", "deep".equals(request.depth()) ? "deep" : "fast");
         body.put("history", history(request.history()));
         body.put("context", context(user, analysis, request.quantities()));
-        return ai.postJson("/assistant", body);
+        return callAi("copilot:" + user.id(), "/assistant", body);
     }
 
     public Map<String, Object> render(CurrentUser user, Long analysisId, RenderRequest request) {
@@ -130,7 +132,17 @@ public class CopilotService {
         body.put("style", request.style());
         body.put("scene", scene);
         body.put("notes", notes);
-        return ai.postJson("/render", body);
+        return callAi("render:" + user.id(), "/render", body);
+    }
+
+    /** A question or render that the AI could not answer does not count against the daily limit. */
+    private Map<String, Object> callAi(String quotaKey, String path, Map<String, Object> body) {
+        try {
+            return ai.postJson(path, body);
+        } catch (RuntimeException e) {
+            quota.giveBack(quotaKey);
+            throw e;
+        }
     }
 
     /** AI capabilities plus what this user has left today. */
@@ -170,7 +182,7 @@ public class CopilotService {
         Map<Long, String> materialNames = names(materials.findAll());
 
         List<Map<String, Object>> rows = new ArrayList<>();
-        for (StructuralElement e : elements.findAllByAiAnalysisIdOrderByIdAsc(analysis.getId())) {
+        for (StructuralElement e : elements.findAllByAiAnalysisIdOrderByIdAsc(analysis.getId()).stream().limit(MAX_CONTEXT_ELEMENTS).toList()) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", e.getId());
             row.put("type", types.getOrDefault(e.getElementTypeId(), "Otro"));
