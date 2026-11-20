@@ -21,7 +21,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
@@ -65,8 +68,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/roles").permitAll()
                 .requestMatchers(HttpMethod.GET, CATALOGS).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/floor-plans/*/image").permitAll()
-                .requestMatchers(CATALOGS).hasRole("ADMINISTRADOR")
-                .requestMatchers("/api/v1/users/**").hasRole("ADMINISTRADOR")
+                // The demo administrator sees the admin panel but cannot change it.
+                .requestMatchers(HttpMethod.GET, "/api/v1/users/**").hasRole("ADMINISTRADOR")
+                .requestMatchers(CATALOGS).access(adminButNotDemo())
+                .requestMatchers("/api/v1/users/**").access(adminButNotDemo())
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth -> oauth
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(activeSessionConverter(users)))
@@ -115,11 +120,24 @@ public class SecurityConfig {
             if (role == null) {
                 return List.of();
             }
-            return List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(Locale.ROOT)));
+            GrantedAuthority roleAuthority = new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(Locale.ROOT));
+            if (DemoAccounts.isDemo(jwt.getClaimAsString("email"))) {
+                return List.of(roleAuthority, new SimpleGrantedAuthority(DemoAccounts.AUTHORITY));
+            }
+            return List.of(roleAuthority);
         };
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(roles);
         return converter;
+    }
+
+    /** Administrators only, and never the demo administrator. */
+    private static AuthorizationManager<RequestAuthorizationContext> adminButNotDemo() {
+        return (authentication, context) -> {
+            var authorities = authentication.get().getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+            return new AuthorizationDecision(
+                    authorities.contains("ROLE_ADMINISTRADOR") && !authorities.contains(DemoAccounts.AUTHORITY));
+        };
     }
 
     private AuthenticationEntryPoint unauthorized() {

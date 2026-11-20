@@ -18,12 +18,16 @@ import com.renderia.renderia_backend.model.BuildingType;
 import com.renderia.renderia_backend.model.FloorPlan;
 import com.renderia.renderia_backend.model.FloorPlanFile;
 import com.renderia.renderia_backend.model.Project;
+import com.renderia.renderia_backend.model.ProjectMember;
+import com.renderia.renderia_backend.model.Role;
 import com.renderia.renderia_backend.model.User;
 import com.renderia.renderia_backend.repository.BuildingTypeRepository;
 import com.renderia.renderia_backend.repository.FloorPlanFileRepository;
 import com.renderia.renderia_backend.repository.FloorPlanRepository;
+import com.renderia.renderia_backend.repository.ProjectMemberRepository;
 import com.renderia.renderia_backend.repository.ProjectRepository;
 import com.renderia.renderia_backend.repository.UserRepository;
+import com.renderia.renderia_backend.security.DemoAccounts;
 
 /**
  * Proyectos de ejemplo para las cuentas de prueba. Si una cuenta de prueba no
@@ -56,24 +60,27 @@ public class DemoDataInitializer implements ApplicationRunner {
     private final BuildingTypeRepository buildingTypes;
     private final FloorPlanRepository floorPlans;
     private final FloorPlanFileRepository floorPlanFiles;
+    private final ProjectMemberRepository members;
     private final String publicUrl;
 
     public DemoDataInitializer(UserRepository users, ProjectRepository projects, BuildingTypeRepository buildingTypes,
                                FloorPlanRepository floorPlans, FloorPlanFileRepository floorPlanFiles,
-                               @Value("${app.public-url}") String publicUrl) {
+                               ProjectMemberRepository members, @Value("${app.public-url}") String publicUrl) {
         this.users = users;
         this.projects = projects;
         this.buildingTypes = buildingTypes;
         this.floorPlans = floorPlans;
         this.floorPlanFiles = floorPlanFiles;
+        this.members = members;
         this.publicUrl = publicUrl.replaceAll("/+$", "");
     }
 
     @Override
     public void run(ApplicationArguments args) {
         try {
-            createSampleProjects(DemoAccountsInitializer.ENGINEER_EMAIL, ENGINEER_PROJECTS);
-            createSampleProjects(DemoAccountsInitializer.STUDENT_EMAIL, STUDENT_PROJECTS);
+            createSampleProjects(DemoAccounts.emailOf(Role.ENGINEER), ENGINEER_PROJECTS);
+            createSampleProjects(DemoAccounts.emailOf(Role.STUDENT), STUDENT_PROJECTS);
+            shareWithDemoClient(DemoAccounts.emailOf(Role.ENGINEER));
         } catch (RuntimeException e) {
             log.warn("No se pudieron crear los proyectos de ejemplo: {}", e.getMessage());
         }
@@ -104,6 +111,19 @@ public class DemoDataInitializer implements ApplicationRunner {
             }
         }
         log.info("Proyectos de ejemplo creados para {}", email);
+    }
+
+    /** The demo client sees the demo engineer's first project, as a real client would. */
+    @Transactional
+    void shareWithDemoClient(String ownerEmail) {
+        User owner = users.findByEmailIgnoreCase(ownerEmail).orElse(null);
+        User client = users.findByEmailIgnoreCase(DemoAccounts.emailOf(Role.CLIENT)).orElse(null);
+        if (owner == null || client == null || !members.findAllByUserId(client.getId()).isEmpty()) {
+            return;
+        }
+        projects.findAllByUserIdOrderByCreatedAtDesc(owner.getId()).stream()
+                .reduce((newer, older) -> older)
+                .ifPresent(project -> members.save(new ProjectMember(project.getId(), client.getId())));
     }
 
     private void addSamplePlan(Project project, byte[] image) {

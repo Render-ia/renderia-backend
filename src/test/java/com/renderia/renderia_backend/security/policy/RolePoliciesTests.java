@@ -40,4 +40,22 @@ class RolePoliciesTests {
         assertInstanceOf(StudentPolicy.class, RolePolicies.forRole("Hacker"));
         assertInstanceOf(StudentPolicy.class, RolePolicies.forRole(null));
     }
+
+    @Test
+    void reviewerSeesAndReviewsEverythingButChangesNothing() {
+        RolePolicy policy = RolePolicies.forRole(Role.REVIEWER);
+        assertTrue(policy.canViewAllProjects());
+        assertTrue(policy.canReviewAnyProject());
+        assertFalse(policy.canManageAnyProject());
+        assertEquals(0, policy.projectLimit());
+    }
+
+    @Test
+    void clientOnlySeesWhatIsSharedWithThem() {
+        RolePolicy policy = RolePolicies.forRole(Role.CLIENT);
+        assertFalse(policy.canViewAllProjects());
+        assertFalse(policy.canReviewAnyProject());
+        assertFalse(policy.canManageAnyProject());
+        assertEquals(0, policy.projectLimit());
+    }
 }

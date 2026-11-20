@@ -103,10 +103,13 @@ public class ProjectService {
                 || members.existsByProjectIdAndUserId(project.getId(), user.id());
     }
 
-    /** Proyecto que el usuario puede modificar: el suyo, o cualquiera si su rol lo permite. */
+    /**
+     * Project the user can change: their own, or any if the role allows it.
+     * Demo accounts only change their own projects, so the demo administrator cannot damage real data.
+     */
     public Project findManageable(CurrentUser user, Long id) {
         Project project = findVisible(user, id);
-        if (!project.getUserId().equals(user.id()) && !user.policy().canManageAnyProject()) {
+        if (!project.getUserId().equals(user.id()) && (!user.policy().canManageAnyProject() || user.demo())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Solo el dueño del proyecto puede modificarlo.");
         }
         return project;

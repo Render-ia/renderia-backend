@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.renderia.renderia_backend.validation.InputValidator;
-import com.renderia.renderia_backend.config.DemoAccountsInitializer;
 import com.renderia.renderia_backend.dto.AuthResponse;
 import com.renderia.renderia_backend.dto.DemoLoginRequest;
 import com.renderia.renderia_backend.dto.LoginRequest;
@@ -21,6 +20,7 @@ import com.renderia.renderia_backend.model.Role;
 import com.renderia.renderia_backend.model.User;
 import com.renderia.renderia_backend.repository.RoleRepository;
 import com.renderia.renderia_backend.repository.UserRepository;
+import com.renderia.renderia_backend.security.DemoAccounts;
 import com.renderia.renderia_backend.security.JwtService;
 import com.renderia.renderia_backend.security.ratelimit.AuthRateLimiter;
 
@@ -29,7 +29,7 @@ import com.renderia.renderia_backend.security.ratelimit.AuthRateLimiter;
 public class AuthService {
 
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
-    private static final Set<String> SELF_REGISTER_ROLES = Set.of(Role.ENGINEER, Role.STUDENT);
+    private static final Set<String> SELF_REGISTER_ROLES = Set.of(Role.ENGINEER, Role.STUDENT, Role.CLIENT);
     private static final int MIN_PASSWORD_LENGTH = 8;
     /** BCrypt solo tiene en cuenta los primeros 72 bytes de la contraseña. */
     private static final int MAX_PASSWORD_LENGTH = 72;
@@ -112,19 +112,15 @@ public class AuthService {
     }
 
     /**
-     * Entrada directa a las cuentas de prueba (botones del login). Así el frontend
-     * no necesita conocer sus contraseñas. Solo funciona si la cuenta fue creada
-     * con DEMO_ENGINEER_PASSWORD o DEMO_STUDENT_PASSWORD y sigue activa.
+     * Direct entry to the demo accounts (login buttons), so the frontend never
+     * needs their passwords. Works for any of the five roles while the account is active.
      */
     @Transactional(readOnly = true)
     public AuthResponse demoLogin(DemoLoginRequest request) {
         String role = request == null || request.role() == null ? "" : request.role().trim();
-        String email = switch (role) {
-            case Role.ENGINEER -> DemoAccountsInitializer.ENGINEER_EMAIL;
-            case Role.STUDENT -> DemoAccountsInitializer.STUDENT_EMAIL;
-            default -> throw ApiException.badRequest("Solo hay cuentas de prueba de Ingeniero y Estudiante.");
-        };
-        User user = users.findByEmailIgnoreCase(email)
+        DemoAccounts.Account account = DemoAccounts.forRole(role)
+                .orElseThrow(() -> ApiException.badRequest("No hay cuenta de prueba para ese rol."));
+        User user = users.findByEmailIgnoreCase(account.email())
                 .filter(User::isActive)
                 .orElseThrow(() -> ApiException.notFound("La cuenta de prueba de " + role + " no está habilitada."));
         return new AuthResponse(jwtService.generateToken(user), UserResponse.from(user));
