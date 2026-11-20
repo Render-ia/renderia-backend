@@ -23,6 +23,7 @@ import com.renderia.renderia_backend.repository.AiAnalysisRepository;
 import com.renderia.renderia_backend.repository.AiModelRepository;
 import com.renderia.renderia_backend.repository.ElementTypeRepository;
 import com.renderia.renderia_backend.repository.MaterialRepository;
+import com.renderia.renderia_backend.repository.Model3DRepository;
 import com.renderia.renderia_backend.repository.StructuralElementRepository;
 import com.renderia.renderia_backend.security.CurrentUser;
 
@@ -36,16 +37,19 @@ public class AnalysisService {
     private final ElementTypeRepository elementTypes;
     private final MaterialRepository materials;
     private final FloorPlanService floorPlans;
+    private final Model3DRepository models3d;
 
     public AnalysisService(AiAnalysisRepository analyses, StructuralElementRepository elements,
                            AiModelRepository aiModels, ElementTypeRepository elementTypes,
-                           MaterialRepository materials, FloorPlanService floorPlans) {
+                           MaterialRepository materials, FloorPlanService floorPlans,
+                           Model3DRepository models3d) {
         this.analyses = analyses;
         this.elements = elements;
         this.aiModels = aiModels;
         this.elementTypes = elementTypes;
         this.materials = materials;
         this.floorPlans = floorPlans;
+        this.models3d = models3d;
     }
 
     @Transactional(readOnly = true)
@@ -104,7 +108,10 @@ public class AnalysisService {
 
     @Transactional
     public void delete(CurrentUser user, Long id) {
-        analyses.delete(findManageable(user, id));
+        AiAnalysis analysis = findManageable(user, id);
+        // El modelo 3D apunta al análisis: se borra primero para no romper la llave foránea.
+        models3d.deleteAllByAnalysisId(analysis.getId());
+        analyses.delete(analysis);
     }
 
     @Transactional(readOnly = true)

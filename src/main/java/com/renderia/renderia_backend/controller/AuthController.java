@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.renderia.renderia_backend.dto.AuthResponse;
+import com.renderia.renderia_backend.dto.DemoLoginRequest;
 import com.renderia.renderia_backend.dto.LoginRequest;
 import com.renderia.renderia_backend.dto.RegisterRequest;
 import com.renderia.renderia_backend.dto.UserResponse;
@@ -39,6 +40,11 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request, HttpServletRequest http) {
         return authService.login(request, clientIp.resolve(http));
+    }
+
+    @PostMapping("/demo")
+    public AuthResponse demoLogin(@RequestBody DemoLoginRequest request) {
+        return authService.demoLogin(request);
     }
 
     @GetMapping("/me")

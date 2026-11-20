@@ -1,0 +1,38 @@
+name: Keep services awake
+
+# Render duerme los servicios gratis tras 15 minutos sin tráfico y despertarlos
+# tarda cerca de un minuto. Este flujo consulta /health del backend y de la IA
+# cada 10 minutos de 7:00 a. m. a 9:59 p. m. (hora de Colombia) para que la
+# aplicación responda rápido cuando el profesor la revise.
+# También se puede lanzar a mano desde la pestaña Actions ("Run workflow")
+# unos minutos antes de la sustentación.
+# Ojo: el plan gratis da 750 horas al mes para todos los servicios juntos;
+# revisa el consumo en Render (Billing) y desactiva este flujo si se acerca al límite.
+on:
+  schedule:
+    - cron: '*/10 12-23 * * *'
+    - cron: '*/10 0-2 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Wake backend and AI service
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Ping health endpoints
+        run: |
+          failed=0
+          for url in \
+            https://renderia-backend.onrender.com/api/v1/health \
+            https://renderia-ai.onrender.com/health; do
+            for attempt in 1 2 3 4 5 6; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 "$url" || echo 000)
+              echo "$url -> $code (intento $attempt)"
+              [ "$code" = "200" ] && break
+              sleep 15
+            done
+            # Si un servicio no respondió, el flujo queda en rojo para enterarnos.
+            [ "$code" = "200" ] || failed=1
+          done
+          exit $failed
