@@ -96,6 +96,12 @@ public class SchemaUpdater implements ApplicationRunner {
             updated_by     BIGINT    REFERENCES users(id) ON DELETE SET NULL,
             updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
+        """,
+        // 009: elevators found in the building core by the vision detector.
+        """
+        INSERT INTO element_types (name, description)
+        VALUES ('Ascensor', 'Cabina y foso del ascensor en el núcleo del edificio')
+        ON CONFLICT (name) DO NOTHING
         """
     };
 
