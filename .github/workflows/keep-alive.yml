@@ -22,6 +22,7 @@ jobs:
     steps:
       - name: Ping health endpoints
         run: |
+          failed=0
           for url in \
             https://renderia-backend.onrender.com/api/v1/health \
             https://renderia-ai.onrender.com/health; do
@@ -31,4 +32,7 @@ jobs:
               [ "$code" = "200" ] && break
               sleep 15
             done
+            # Si un servicio no respondió, el flujo queda en rojo para enterarnos.
+            [ "$code" = "200" ] || failed=1
           done
+          exit $failed
