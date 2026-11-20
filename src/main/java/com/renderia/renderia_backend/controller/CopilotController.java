@@ -1,5 +1,6 @@
 package com.renderia.renderia_backend.controller;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,6 +31,11 @@ public class CopilotController {
     @PostMapping("/analyses/{id}/copilot")
     public Map<String, Object> ask(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id, @RequestBody CopilotRequest request) {
         return service.ask(CurrentUser.from(jwt), id, request);
+    }
+
+    @GetMapping("/analyses/{id}/copilot/messages")
+    public List<Map<String, Object>> conversation(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+        return service.conversation(CurrentUser.from(jwt), id);
     }
 
     @PostMapping("/analyses/{id}/render")
