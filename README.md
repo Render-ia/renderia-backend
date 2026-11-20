@@ -51,7 +51,7 @@ Todas las rutas empiezan por `/api/v1`. El contrato completo que usa el frontend
 | PUT | `/ai-models/{id}` | Administrador | Activar un modelo o elegir el predeterminado |
 | GET, POST | `/projects/{id}/members` | Con token | Ver y compartir un proyecto (solo el dueño agrega) |
 | DELETE | `/projects/{id}/members/{userId}` | Con token | Dejar de compartir |
-| POST | `/analyses/{id}/review` | Dueño o Revisor | Marca el análisis como revisado; el servidor guarda quién y cuándo |
+| POST | `/analyses/{id}/review` | Dueño o Revisor | Marca el análisis como revisado; el servidor guarda quién y cuándo en el resumen del análisis |
 | POST | `/analyses/{id}/copilot` | Con token | Pregunta al copiloto de ingeniería sobre el análisis (límite diario por usuario) |
 | POST | `/analyses/{id}/render` | Con token | Render con IA desde una captura del visor 3D (límite diario por usuario) |
 | GET | `/ai/capabilities` | Con token | Qué funciones de IA están activas y cuántas consultas le quedan hoy al usuario |
