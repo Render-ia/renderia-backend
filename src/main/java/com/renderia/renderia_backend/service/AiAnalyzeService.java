@@ -4,7 +4,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.renderia.renderia_backend.ai.AiServiceClient;
 import com.renderia.renderia_backend.dto.AiAnalyzeRequest;
@@ -34,7 +33,10 @@ public class AiAnalyzeService {
         this.aiService = aiService;
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Sin transacción a propósito: la llamada a la IA puede tardar mientras el servicio
+     * despierta, y no se debe tener ocupada una conexión de la base de datos todo ese tiempo.
+     */
     public Map<String, Object> analyze(CurrentUser user, AiAnalyzeRequest request) {
         if (request == null || request.floorPlanId() == null || request.aiModelId() == null) {
             throw ApiException.badRequest("Elige el plano y el modelo de IA.");
