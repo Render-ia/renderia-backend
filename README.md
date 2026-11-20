@@ -48,6 +48,9 @@ Todas las rutas empiezan por `/api/v1`. El contrato completo que usa el frontend
 | POST, PUT, DELETE | `/building-types`, `/element-types`, `/materials` | Administrador | Editar catálogos |
 | GET | `/ai-models` | Público | Modelos de IA disponibles |
 | PUT | `/ai-models/{id}` | Administrador | Activar un modelo o elegir el predeterminado |
+| POST | `/analyses/{id}/copilot` | Con token | Pregunta al copiloto de ingeniería sobre el análisis (límite diario por usuario) |
+| POST | `/analyses/{id}/render` | Con token | Render con IA desde una captura del visor 3D (límite diario por usuario) |
+| GET | `/ai/capabilities` | Con token | Qué funciones de IA están activas y cuántas consultas le quedan hoy al usuario |
 
 Los errores responden con el código HTTP adecuado y un cuerpo `{ "message": "..." }` en español.
 
@@ -59,7 +62,7 @@ Los errores responden con el código HTTP adecuado y un cuerpo `{ "message": "..
 | **Singleton** | Servicios y configuración (`@Service`, `@Configuration`) | Spring crea una sola instancia de cada uno y la comparte |
 | **Repository** | `repository/*` | Separa el acceso a datos de la lógica de negocio |
 | **DTO** | `dto/*` | Lo que viaja por la API no expone las entidades (por ejemplo, nunca sale la contraseña) |
-| **Facade** | `AuthService` | Una sola llamada esconde validar, cifrar, guardar y generar el token |
+| **Facade** | `AuthService`, `CopilotService` | Una sola llamada esconde validar, cifrar, guardar y generar el token; el copiloto revisa acceso y cupo, arma el contexto desde la base de datos y llama al servicio de IA |
 
 ## Estructura
 
@@ -88,6 +91,7 @@ Ninguna clave se guarda en el repositorio. En Render se configuran estas variabl
 | `AI_SERVICE_URL`, `AI_API_KEY` | Dirección del servicio de IA y la clave compartida con él |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Crean la primera cuenta de administrador al arrancar |
 | `DEMO_ENGINEER_PASSWORD`, `DEMO_STUDENT_PASSWORD` | Crean las cuentas de prueba `ingeniero@renderia.co` y `estudiante@renderia.co` (opcional). Si una cuenta de prueba no tiene proyectos, al arrancar se le crean proyectos de ejemplo con el plano de la casa listo para analizar |
+| `COPILOT_DAILY_LIMIT`, `COPILOT_DAILY_LIMIT_STUDENT`, `RENDER_DAILY_LIMIT` | Preguntas al copiloto y renders con IA por usuario y por día (por defecto 60, 20 y 5) |
 | `FRONTEND_URL` | Dominios con permiso CORS (opcional; por defecto Vercel y `localhost:5173`) |
 
 La lista completa, con ejemplos falsos, está en [`.env.example`](.env.example).
