@@ -18,15 +18,22 @@ import com.renderia.renderia_backend.dto.RenderRequest;
 import com.renderia.renderia_backend.exception.ApiException;
 import com.renderia.renderia_backend.model.AiAnalysis;
 import com.renderia.renderia_backend.model.CatalogEntity;
+import com.renderia.renderia_backend.model.CopilotMessage;
 import com.renderia.renderia_backend.model.FloorPlan;
 import com.renderia.renderia_backend.model.Project;
 import com.renderia.renderia_backend.model.Role;
 import com.renderia.renderia_backend.model.StructuralElement;
+import com.renderia.renderia_backend.repository.CopilotMessageRepository;
 import com.renderia.renderia_backend.repository.ElementTypeRepository;
 import com.renderia.renderia_backend.repository.MaterialRepository;
 import com.renderia.renderia_backend.repository.StructuralElementRepository;
 import com.renderia.renderia_backend.security.CurrentUser;
 import com.renderia.renderia_backend.security.quota.DailyQuota;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Pattern: Facade — the copilot and the AI render seen from the backend.
@@ -48,6 +55,10 @@ public class CopilotService {
     static final int MAX_IMAGE_CHARS = 6_200_000;
     static final Set<String> STYLES = Set.of("modern", "tropical", "rustic", "contemporary", "minimalist", "traditional");
     static final Set<String> SCENES = Set.of("exterior", "interior");
+    /** Saved answers and proposals are cut at these sizes so one reply cannot fill the database. */
+    static final int MAX_SAVED_ANSWER = 20_000;
+    static final int MAX_SAVED_PROPOSALS = 50_000;
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final AiServiceClient ai;
     private final AnalysisService analyses;
@@ -56,6 +67,7 @@ public class CopilotService {
     private final StructuralElementRepository elements;
     private final ElementTypeRepository elementTypes;
     private final MaterialRepository materials;
+    private final CopilotMessageRepository messages;
     private final DailyQuota quota;
     private final int copilotLimit;
     private final int studentCopilotLimit;
@@ -64,17 +76,17 @@ public class CopilotService {
     @Autowired
     public CopilotService(AiServiceClient ai, AnalysisService analyses, FloorPlanService floorPlans, ProjectService projects,
                           StructuralElementRepository elements, ElementTypeRepository elementTypes,
-                          MaterialRepository materials,
+                          MaterialRepository materials, CopilotMessageRepository messages,
                           @Value("${app.ai.copilot-daily-limit:60}") int copilotLimit,
                           @Value("${app.ai.copilot-daily-limit-student:20}") int studentCopilotLimit,
                           @Value("${app.ai.render-daily-limit:5}") int renderLimit) {
-        this(ai, analyses, floorPlans, projects, elements, elementTypes, materials,
+        this(ai, analyses, floorPlans, projects, elements, elementTypes, materials, messages,
                 new DailyQuota(Clock.systemUTC()), copilotLimit, studentCopilotLimit, renderLimit);
     }
 
     CopilotService(AiServiceClient ai, AnalysisService analyses, FloorPlanService floorPlans, ProjectService projects,
                    StructuralElementRepository elements, ElementTypeRepository elementTypes, MaterialRepository materials,
-                   DailyQuota quota, int copilotLimit, int studentCopilotLimit, int renderLimit) {
+                   CopilotMessageRepository messages, DailyQuota quota, int copilotLimit, int studentCopilotLimit, int renderLimit) {
         this.ai = ai;
         this.analyses = analyses;
         this.floorPlans = floorPlans;
@@ -82,6 +94,7 @@ public class CopilotService {
         this.elements = elements;
         this.elementTypes = elementTypes;
         this.materials = materials;
+        this.messages = messages;
         this.quota = quota;
         this.copilotLimit = copilotLimit;
         this.studentCopilotLimit = studentCopilotLimit;
@@ -105,7 +118,55 @@ public class CopilotService {
         body.put("depth", "deep".equals(request.depth()) ? "deep" : "fast");
         body.put("history", history(request.history()));
         body.put("context", context(user, analysis, request.quantities()));
-        return callAi("copilot:" + user.id(), "/assistant", body);
+        Map<String, Object> answer = callAi("copilot:" + user.id(), "/assistant", body);
+        remember(user, analysis.getId(), question, answer);
+        return answer;
+    }
+
+    /** The user's saved conversation about this analysis, oldest first (up to the last 100 turns). */
+    public List<Map<String, Object>> conversation(CurrentUser user, Long analysisId) {
+        analyses.findVisible(user, analysisId);
+        List<CopilotMessage> newestFirst = messages.findTop100ByAiAnalysisIdAndUserIdOrderByIdDesc(analysisId, user.id());
+        List<Map<String, Object>> turns = new ArrayList<>();
+        for (int i = newestFirst.size() - 1; i >= 0; i--) {
+            CopilotMessage message = newestFirst.get(i);
+            Map<String, Object> turn = new LinkedHashMap<>();
+            turn.put("role", message.getRole());
+            turn.put("text", message.getContent());
+            turn.put("proposals", proposals(message.getProposals()));
+            turn.put("createdAt", message.getCreatedAt());
+            turns.add(turn);
+        }
+        return turns;
+    }
+
+    /** Saves the question and the answer, so the conversation is still there on the next visit. */
+    void remember(CurrentUser user, Long analysisId, String question, Map<String, Object> answer) {
+        Object text = answer == null ? null : answer.get("answer");
+        if (!(text instanceof String reply) || reply.isBlank()) {
+            return;
+        }
+        String proposals = null;
+        Object list = answer.get("proposals");
+        if (list instanceof List<?> items && !items.isEmpty()) {
+            String json = JSON.writeValueAsString(items);
+            proposals = json.length() > MAX_SAVED_PROPOSALS ? null : json;
+        }
+        messages.save(new CopilotMessage(analysisId, user.id(), CopilotMessage.USER, question, null));
+        messages.save(new CopilotMessage(analysisId, user.id(), CopilotMessage.MODEL,
+                reply.length() > MAX_SAVED_ANSWER ? reply.substring(0, MAX_SAVED_ANSWER) : reply, proposals));
+    }
+
+    private static Object proposals(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return List.of();
+        }
+        try {
+            JsonNode node = JSON.readTree(stored);
+            return node.isArray() ? node : List.of();
+        } catch (JacksonException e) {
+            return List.of();
+        }
     }
 
     public Map<String, Object> render(CurrentUser user, Long analysisId, RenderRequest request) {

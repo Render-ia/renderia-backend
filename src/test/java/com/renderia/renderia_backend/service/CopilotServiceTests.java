@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,13 +20,16 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.renderia.renderia_backend.ai.AiServiceClient;
 import com.renderia.renderia_backend.dto.CopilotRequest;
 import com.renderia.renderia_backend.dto.RenderRequest;
 import com.renderia.renderia_backend.exception.ApiException;
 import com.renderia.renderia_backend.model.AiAnalysis;
+import com.renderia.renderia_backend.model.CopilotMessage;
 import com.renderia.renderia_backend.model.Role;
+import com.renderia.renderia_backend.repository.CopilotMessageRepository;
 import com.renderia.renderia_backend.repository.ElementTypeRepository;
 import com.renderia.renderia_backend.repository.MaterialRepository;
 import com.renderia.renderia_backend.repository.StructuralElementRepository;
@@ -37,16 +41,18 @@ class CopilotServiceTests {
     private AiServiceClient ai;
     private AnalysisService analyses;
     private CopilotService service;
+    private CopilotMessageRepository messages;
     private final CurrentUser engineer = new CurrentUser(7L, Role.ENGINEER);
 
     @BeforeEach
     void setUp() {
         ai = mock(AiServiceClient.class);
         analyses = mock(AnalysisService.class);
+        messages = mock(CopilotMessageRepository.class);
         DailyQuota quota = new DailyQuota(Clock.fixed(Instant.parse("2026-11-20T08:00:00Z"), ZoneOffset.UTC));
         service = new CopilotService(ai, analyses, mock(FloorPlanService.class), mock(ProjectService.class),
                 mock(StructuralElementRepository.class), mock(ElementTypeRepository.class), mock(MaterialRepository.class),
-                quota, 60, 20, 1);
+                messages, quota, 60, 20, 1);
     }
 
     @Test
@@ -116,5 +122,49 @@ class CopilotServiceTests {
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0)).containsEntry("totalCop", 13_900_000.0);
+    }
+
+    @Test
+    void savesTheQuestionAndTheAnswerWithItsProposals() {
+        service.remember(engineer, 3L, "¿Qué muros son delgados?",
+                Map.of("answer", "El muro #4 mide 8 cm.", "proposals", List.of(Map.of("elementId", 4, "field", "thickness", "value", 0.12))));
+
+        ArgumentCaptor<CopilotMessage> saved = ArgumentCaptor.forClass(CopilotMessage.class);
+        verify(messages, times(2)).save(saved.capture());
+        CopilotMessage question = saved.getAllValues().get(0);
+        CopilotMessage answer = saved.getAllValues().get(1);
+        assertThat(question.getRole()).isEqualTo("user");
+        assertThat(question.getContent()).isEqualTo("¿Qué muros son delgados?");
+        assertThat(question.getUserId()).isEqualTo(7L);
+        assertThat(answer.getRole()).isEqualTo("model");
+        assertThat(answer.getAiAnalysisId()).isEqualTo(3L);
+        assertThat(answer.getProposals()).contains("\"elementId\":4");
+    }
+
+    @Test
+    void doesNotSaveAnAnswerWithoutText() {
+        service.remember(engineer, 3L, "hola", Map.of("proposals", List.of()));
+        verify(messages, never()).save(any());
+    }
+
+    @Test
+    void returnsTheConversationOldestFirstAfterCheckingAccess() {
+        when(messages.findTop100ByAiAnalysisIdAndUserIdOrderByIdDesc(3L, 7L)).thenReturn(List.of(
+                new CopilotMessage(3L, 7L, "model", "respuesta", "[{\"elementId\":1}]"),
+                new CopilotMessage(3L, 7L, "user", "pregunta", null)));
+
+        List<Map<String, Object>> turns = service.conversation(engineer, 3L);
+
+        verify(analyses).findVisible(engineer, 3L);
+        assertThat(turns).extracting(t -> t.get("text")).containsExactly("pregunta", "respuesta");
+        assertThat(turns.get(0).get("proposals")).isEqualTo(List.of());
+        assertThat(turns.get(1).get("proposals").toString()).contains("elementId");
+    }
+
+    @Test
+    void aConversationOfAnotherUsersAnalysisIsRefused() {
+        when(analyses.findVisible(engineer, 9L)).thenThrow(ApiException.notFound("El análisis no existe o no tienes acceso a él."));
+        assertThatThrownBy(() -> service.conversation(engineer, 9L)).isInstanceOf(ApiException.class);
+        verify(messages, never()).findTop100ByAiAnalysisIdAndUserIdOrderByIdDesc(any(), any());
     }
 }
