@@ -96,6 +96,13 @@ public class SchemaUpdater implements ApplicationRunner {
             updated_by     BIGINT    REFERENCES users(id) ON DELETE SET NULL,
             updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
+        """,
+        // 009: building types of the sample projects (school and health center).
+        """
+        INSERT INTO building_types (name, description) VALUES
+            ('Institución educativa', 'Colegio, escuela o universidad'),
+            ('Centro de salud', 'Hospital, clínica o centro de atención médica')
+        ON CONFLICT (name) DO NOTHING
         """
     };
 
