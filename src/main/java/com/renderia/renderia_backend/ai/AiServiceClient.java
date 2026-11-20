@@ -51,7 +51,7 @@ public class AiServiceClient {
                 .build();
         SimpleClientHttpRequestFactory healthFactory = new SimpleClientHttpRequestFactory();
         healthFactory.setConnectTimeout(10_000);
-        healthFactory.setReadTimeout(70_000);
+        healthFactory.setReadTimeout(30_000);
         this.healthClient = RestClient.builder()
                 .baseUrl(normalizeUrl(url))
                 .requestFactory(healthFactory)
@@ -76,7 +76,7 @@ public class AiServiceClient {
     private static final int MAX_ATTEMPTS = 3;
     private static final long RETRY_WAIT_MS = 10_000;
     /** Intentos para despertar el servicio antes de mandarle el plano (unos 2 minutos en total). */
-    private static final int WAKE_UP_ATTEMPTS = 6;
+    private static final int WAKE_UP_ATTEMPTS = 4;
     private static final long HEALTHY_FOR_MS = 5 * 60_000;
 
     public AiServiceResponse analyze(String imageUrl, String scale, String provider, String modelIdentifier) {
