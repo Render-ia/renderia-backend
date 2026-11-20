@@ -73,7 +73,7 @@ public class SchemaUpdater implements ApplicationRunner {
         // 007: geometric detector checked by Gemini (falls back to the detector alone without a key).
         """
         INSERT INTO ai_models (name, provider, model_identifier, is_active, is_default)
-        VALUES ('Detector de visión + Gemini', 'gemini', 'renderia-vision-gemini-v1', TRUE, FALSE)
+        VALUES ('Detector de visión + Gemini', 'gemini', 'gemini:flash', TRUE, FALSE)
         ON CONFLICT (model_identifier) DO NOTHING
         """
     };
