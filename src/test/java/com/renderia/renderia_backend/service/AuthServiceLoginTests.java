@@ -55,7 +55,7 @@ class AuthServiceLoginTests {
     }
 
     @Test
-    void conCorreoInexistenteIgualSeComparaUnHashParaNoDelatarlo() {
+    void unknownEmailStillComparesAHashToAvoidRevealingIt() {
         when(users.findByEmailIgnoreCase("nadie@x.co")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.login(new LoginRequest("nadie@x.co", "lo-que-sea"), "1.1.1.1"))
                 .isInstanceOf(ApiException.class)
@@ -64,7 +64,7 @@ class AuthServiceLoginTests {
     }
 
     @Test
-    void despuesDeCincoFallosResponde429SinRevisarLaContrasena() {
+    void afterFiveFailuresAnswers429WithoutCheckingThePassword() {
         User ana = user("ana@x.co", "$hash");
         when(users.findByEmailIgnoreCase("ana@x.co")).thenReturn(Optional.of(ana));
         when(encoder.matches(anyString(), eq("$hash"))).thenReturn(false);
@@ -79,7 +79,7 @@ class AuthServiceLoginTests {
     }
 
     @Test
-    void elCorreoSeNormalizaAntesDeContarIntentos() {
+    void emailIsNormalizedBeforeCountingAttempts() {
         when(users.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
         for (int i = 0; i < 5; i++) {
             String variant = i % 2 == 0 ? " ANA@x.co " : "ana@X.CO";

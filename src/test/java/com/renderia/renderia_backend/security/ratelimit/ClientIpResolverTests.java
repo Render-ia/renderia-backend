@@ -8,7 +8,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 class ClientIpResolverTests {
 
     @Test
-    void detrasDelProxyUsaLaUltimaIpQueAgregaElProxy() {
+    void behindTheProxyUsesTheLastIpAddedByTheProxy() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("10.0.0.1");
         request.addHeader("X-Forwarded-For", "6.6.6.6, 200.1.2.3");
@@ -16,7 +16,7 @@ class ClientIpResolverTests {
     }
 
     @Test
-    void sinProxyIgnoraLaCabeceraPorqueLaPuedeEscribirCualquiera() {
+    void withoutProxyIgnoresTheHeaderBecauseAnyoneCanWriteIt() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr("190.5.5.5");
         request.addHeader("X-Forwarded-For", "6.6.6.6");

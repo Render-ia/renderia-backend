@@ -10,28 +10,28 @@ class JwtKeyConfigTests {
     private static final String STRONG = "una-clave-de-prueba-suficientemente-larga-1234567890";
 
     @Test
-    void produccionSinClaveNoArranca() {
+    void productionWithoutSecretDoesNotStart() {
         assertThatThrownBy(() -> JwtKeyConfig.resolveSecret("", true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Falta JWT_SECRET");
     }
 
     @Test
-    void laClaveQueEstuvoEnGithubSeRechazaSiempre() {
+    void secretThatWasOnGithubIsAlwaysRejected() {
         assertThatThrownBy(() -> JwtKeyConfig.resolveSecret("renderia-local-development-secret-change-me", false))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("público");
     }
 
     @Test
-    void unaClaveCortaSeRechaza() {
+    void shortSecretIsRejected() {
         assertThatThrownBy(() -> JwtKeyConfig.resolveSecret("corta", true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32");
     }
 
     @Test
-    void enLocalSinClaveSeGeneraUnaAleatoriaDistintaCadaVez() {
+    void locallyWithoutSecretARandomOneIsGeneratedEachTime() {
         byte[] first = JwtKeyConfig.resolveSecret(null, false);
         byte[] second = JwtKeyConfig.resolveSecret(null, false);
         assertThat(first).hasSize(64);
@@ -39,7 +39,7 @@ class JwtKeyConfigTests {
     }
 
     @Test
-    void unaClaveFuerteSeUsaTalCual() {
+    void strongSecretIsUsedAsIs() {
         assertThat(JwtKeyConfig.resolveSecret("  " + STRONG + "\n", true)).isEqualTo(STRONG.getBytes());
     }
 }

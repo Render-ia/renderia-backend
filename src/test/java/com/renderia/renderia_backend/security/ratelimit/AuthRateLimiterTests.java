@@ -41,7 +41,7 @@ class AuthRateLimiterTests {
     }
 
     @Test
-    void bloqueaElCorreoDespuesDeCincoFallos() {
+    void blocksTheEmailAfterFiveFailures() {
         MutableClock clock = new MutableClock();
         AuthRateLimiter limiter = new AuthRateLimiter(clock);
         for (int i = 0; i < 5; i++) {
@@ -56,7 +56,7 @@ class AuthRateLimiterTests {
     }
 
     @Test
-    void elBloqueoSeLevantaAlPasarLaVentana() {
+    void blockIsLiftedWhenTheWindowPasses() {
         MutableClock clock = new MutableClock();
         AuthRateLimiter limiter = new AuthRateLimiter(clock);
         for (int i = 0; i < 5; i++) {
@@ -67,7 +67,7 @@ class AuthRateLimiterTests {
     }
 
     @Test
-    void unAciertoLimpiaElContadorDelCorreo() {
+    void successfulLoginClearsTheEmailCounter() {
         AuthRateLimiter limiter = new AuthRateLimiter(new MutableClock());
         for (int i = 0; i < 4; i++) {
             limiter.loginFailed("ana@x.co", "1.1.1.1");
@@ -78,7 +78,7 @@ class AuthRateLimiterTests {
     }
 
     @Test
-    void bloqueaUnaIpQuePruebaMuchosCorreos() {
+    void blocksAnIpThatTriesManyEmails() {
         AuthRateLimiter limiter = new AuthRateLimiter(new MutableClock());
         for (int i = 0; i < 30; i++) {
             limiter.loginFailed("usuario" + i + "@x.co", "9.9.9.9");
@@ -88,7 +88,7 @@ class AuthRateLimiterTests {
     }
 
     @Test
-    void limitaElRegistroMasivoPorIp() {
+    void limitsMassRegistrationPerIp() {
         AuthRateLimiter limiter = new AuthRateLimiter(new MutableClock());
         for (int i = 0; i < 10; i++) {
             limiter.checkRegister("4.4.4.4");

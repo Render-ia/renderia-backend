@@ -30,7 +30,7 @@ class FloorPlanImageSignerTests {
     }
 
     @Test
-    void elEnlaceFirmadoSeAceptaParaSuPlano() {
+    void signedLinkIsAcceptedForItsPlan() {
         FloorPlanImageSigner signer = signerAt(NOW);
         String url = signer.signedUrl(7L);
         assertThat(url).startsWith("https://api.example.com/api/v1/floor-plans/7/image?exp=");
@@ -39,21 +39,21 @@ class FloorPlanImageSignerTests {
     }
 
     @Test
-    void laFirmaDeUnPlanoNoAbreOtro() {
+    void signatureOfOnePlanDoesNotOpenAnother() {
         FloorPlanImageSigner signer = signerAt(NOW);
         Matcher m = params(signer.signedUrl(7L));
         assertThat(signer.isValid(8L, Long.valueOf(m.group(1)), m.group(2))).isFalse();
     }
 
     @Test
-    void cambiarElVencimientoInvalidaLaFirma() {
+    void changingTheExpiryInvalidatesTheSignature() {
         FloorPlanImageSigner signer = signerAt(NOW);
         Matcher m = params(signer.signedUrl(7L));
         assertThat(signer.isValid(7L, Long.valueOf(m.group(1)) + 86_400, m.group(2))).isFalse();
     }
 
     @Test
-    void elEnlaceVenceEnMenosDe48Horas() {
+    void linkExpiresInLessThan48Hours() {
         Matcher m = params(signerAt(NOW).signedUrl(7L));
         long exp = Long.parseLong(m.group(1));
         assertThat(signerAt(NOW.plusSeconds(47 * 3600)).isValid(7L, exp, m.group(2))).isFalse();
@@ -61,13 +61,13 @@ class FloorPlanImageSignerTests {
     }
 
     @Test
-    void sinFirmaNoHayImagen() {
+    void noSignatureMeansNoImage() {
         assertThat(signerAt(NOW).isValid(7L, null, null)).isFalse();
         assertThat(signerAt(NOW).isValid(7L, NOW.getEpochSecond() + 100, "")).isFalse();
     }
 
     @Test
-    void elEnlaceNoCambiaDuranteElMismoDia() {
+    void linkStaysTheSameDuringTheSameDay() {
         assertThat(signerAt(NOW).signedUrl(7L)).isEqualTo(signerAt(NOW.plusSeconds(3600)).signedUrl(7L));
     }
 }
