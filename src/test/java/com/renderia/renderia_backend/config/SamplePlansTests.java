@@ -22,6 +22,7 @@ class SamplePlansTests {
 
     private static final ObjectMapper JSON = JsonMapper.builder().build();
     private static final String[] ANALYZED = {"house-floor-plan", "house-second-floor-plan",
+        "luxury-house-floor-plan", "luxury-house-second-floor-plan",
         "apartment-building-ground-floor-plan", "apartment-building-floor-plan", "school-floor-plan",
         "school-second-floor-plan", "health-center-floor-plan", "health-center-second-floor-plan", "warehouse-floor-plan"};
     private static final String[] PLANS = java.util.stream.Stream.concat(java.util.Arrays.stream(ANALYZED),
@@ -65,7 +66,8 @@ class SamplePlansTests {
     void floorsOfTheSameBuildingLineUp() throws IOException {
         String[][] buildings = {{"apartment-building-ground-floor-plan", "apartment-building-floor-plan"},
             {"school-floor-plan", "school-second-floor-plan"},
-            {"health-center-floor-plan", "health-center-second-floor-plan"}};
+            {"health-center-floor-plan", "health-center-second-floor-plan"},
+            {"luxury-house-floor-plan", "luxury-house-second-floor-plan"}};
         for (String[] floors : buildings) {
             assertEquals(slab(floors[0]), slab(floors[1]), floors[1]);
         }

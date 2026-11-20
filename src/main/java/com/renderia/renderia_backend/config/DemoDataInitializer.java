@@ -69,6 +69,8 @@ public class DemoDataInitializer implements ApplicationRunner {
     private enum SamplePlan {
         HOUSE("house-floor-plan", true),
         HOUSE_SECOND_FLOOR("house-second-floor-plan", true),
+        LUXURY_HOUSE("luxury-house-floor-plan", true),
+        LUXURY_HOUSE_SECOND_FLOOR("luxury-house-second-floor-plan", true),
         APARTMENT_GROUND_FLOOR("apartment-building-ground-floor-plan", true),
         APARTMENT_BUILDING("apartment-building-floor-plan", true),
         SCHOOL("school-floor-plan", true),
@@ -103,6 +105,10 @@ public class DemoDataInitializer implements ApplicationRunner {
             new SampleProject(Role.ENGINEER, "Casa Los Andes", "Vivienda unifamiliar", "Pasto, Nariño",
                     "Casa de dos pisos: zona social abajo y tres alcobas con estudio arriba.",
                     floors(SamplePlan.HOUSE, SamplePlan.HOUSE_SECOND_FLOOR), true),
+            new SampleProject(Role.ENGINEER, "Casa Moderna Chachagüí", "Vivienda unifamiliar", "Chachagüí, Nariño",
+                    "Casa moderna de lujo de dos pisos: parqueadero cubierto, sala comedor con ventanales, "
+                            + "suite principal y terraza.",
+                    floors(SamplePlan.LUXURY_HOUSE, SamplePlan.LUXURY_HOUSE_SECOND_FLOOR), true),
             new SampleProject(Role.ENGINEER, "Edificio Mirador del Volcán", "Edificio residencial", "Pasto, Nariño",
                     "Edificio de seis pisos: locales y portería en el primero, dos apartamentos por piso del segundo al sexto.",
                     floors(SamplePlan.APARTMENT_GROUND_FLOOR, SamplePlan.APARTMENT_BUILDING, SamplePlan.APARTMENT_BUILDING,
