@@ -18,6 +18,7 @@ import com.renderia.renderia_backend.model.Project;
 import com.renderia.renderia_backend.repository.FloorPlanFileRepository;
 import com.renderia.renderia_backend.repository.FloorPlanRepository;
 import com.renderia.renderia_backend.repository.ProjectRepository;
+import com.renderia.renderia_backend.validation.ImageSignature;
 import com.renderia.renderia_backend.security.CurrentUser;
 
 /** Subir, listar, ver y borrar planos, siempre con los permisos del proyecto. */
@@ -91,6 +92,16 @@ public class FloorPlanService {
             throw ApiException.badRequest("La escala debe escribirse como 1:100.");
         }
 
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw ApiException.badRequest("No se pudo leer el archivo del plano.");
+        }
+        if (!ImageSignature.matches(contentType, content)) {
+            throw ApiException.badRequest("El archivo no es una imagen válida o no coincide con su formato.");
+        }
+
         FloorPlan plan = new FloorPlan();
         plan.setProjectId(projectId);
         plan.setFileName(cleanFileName(file.getOriginalFilename()));
@@ -100,11 +111,7 @@ public class FloorPlanService {
         plan = plans.saveAndFlush(plan);
 
         plan.setFileUrl(publicUrl + "/api/v1/floor-plans/" + plan.getId() + "/image");
-        try {
-            files.save(new FloorPlanFile(plan.getId(), contentType, file.getBytes()));
-        } catch (IOException e) {
-            throw ApiException.badRequest("No se pudo leer el archivo del plano.");
-        }
+        files.save(new FloorPlanFile(plan.getId(), contentType, content));
         return FloorPlanResponse.from(plans.save(plan));
     }
 
