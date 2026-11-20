@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.validation.ElementMeasures;
 import com.renderia.renderia_backend.validation.InputValidator;
 import com.renderia.renderia_backend.dto.AnalysisResponse;
 import com.renderia.renderia_backend.dto.AnalysisUpdateRequest;
@@ -157,7 +158,10 @@ public class AnalysisService {
         return elements.saveAll(rows).stream().map(ElementResponse::from).toList();
     }
 
-    /** Cambia el tipo o el material de un elemento. Enviar "materialId": null lo deja sin material. */
+    /**
+     * Cambia el tipo, el material o las medidas (height, thickness, width) de un elemento.
+     * Enviar "materialId": null lo deja sin material.
+     */
     @Transactional
     public ElementResponse updateElement(CurrentUser user, Long elementId, Map<String, Object> changes) {
         StructuralElement element = elements.findById(elementId)
@@ -178,6 +182,7 @@ public class AnalysisService {
             }
             element.setMaterialId(materialId);
         }
+        ElementMeasures.apply(element, changes);
         return ElementResponse.from(elements.save(element));
     }
 
