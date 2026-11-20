@@ -2,7 +2,6 @@ package com.renderia.renderia_backend.config;
 
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -10,14 +9,13 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-import com.renderia.renderia_backend.model.Role;
 import com.renderia.renderia_backend.security.DemoAccounts;
 
 /**
- * Creates one demo account per role (see {@link DemoAccounts}) so the teacher can try
- * the deployed platform from the login buttons. A password set in the environment is
- * used if present; otherwise a random one is generated, hashed with BCrypt and thrown
- * away, so nobody knows it and the account can only be entered through /auth/demo.
+ * Prepares one demo account per role (see {@link DemoAccounts}) so the teacher can try
+ * the deployed platform from the login buttons. Each start gives them a new random
+ * password, hashed with BCrypt and thrown away: nobody knows it, it is not in any
+ * repository or log, and the accounts can only be entered through /auth/demo.
  * Disabled with DEMO_ACCOUNTS=false.
  */
 @Component
@@ -28,15 +26,10 @@ public class DemoAccountsInitializer implements ApplicationRunner {
 
     private final AccountSeeder seeder;
     private final boolean enabled;
-    private final Map<String, String> passwords;
 
-    public DemoAccountsInitializer(AccountSeeder seeder,
-                                   @Value("${app.demo.enabled:true}") boolean enabled,
-                                   @Value("${app.demo.engineer-password:}") String engineerPassword,
-                                   @Value("${app.demo.student-password:}") String studentPassword) {
+    public DemoAccountsInitializer(AccountSeeder seeder, @Value("${app.demo.enabled:true}") boolean enabled) {
         this.seeder = seeder;
         this.enabled = enabled;
-        this.passwords = Map.of(Role.ENGINEER, engineerPassword, Role.STUDENT, studentPassword);
     }
 
     @Override
@@ -45,9 +38,7 @@ public class DemoAccountsInitializer implements ApplicationRunner {
             return;
         }
         for (DemoAccounts.Account account : DemoAccounts.ALL) {
-            String password = passwords.getOrDefault(account.role(), "");
-            seeder.createIfMissing(account.email(), account.fullName(), account.role(),
-                    password.isBlank() ? randomPassword() : password);
+            seeder.ensureDemoAccount(account.email(), account.fullName(), account.role(), randomPassword());
         }
     }
 

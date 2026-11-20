@@ -72,7 +72,7 @@ Las reglas viven en `security/policy` (patrón Strategy): una política por rol.
 
 ### Cuentas de prueba
 
-Hay una por rol: `admin.prueba@`, `ingeniero@`, `revisor@`, `cliente@` y `estudiante@renderia.co`. Se entra con los botones "Usar" del login, que llaman a `/auth/demo`, así que ninguna contraseña viaja al navegador. Si no se define una contraseña por variable de entorno, se genera una aleatoria que solo queda guardada como hash BCrypt y nadie conoce. El administrador de prueba ve todo el panel, pero no puede cambiar usuarios, catálogos, modelos de IA ni proyectos ajenos. El cliente de prueba ve el primer proyecto del ingeniero de prueba. Se apagan con `DEMO_ACCOUNTS=false`.
+Hay una por rol: `admin.prueba@`, `ingeniero@`, `revisor@`, `cliente@` y `estudiante@renderia.co`. Se entra con los botones "Usar" del login, que llaman a `/auth/demo`, así que ninguna contraseña viaja al navegador. Cada vez que el servidor arranca, sus contraseñas se cambian por unas aleatorias que solo quedan guardadas como hash BCrypt: nadie las conoce y las contraseñas que se publicaron antes dejan de servir. El administrador de prueba ve todo el panel, pero no puede cambiar usuarios, catálogos, modelos de IA ni proyectos ajenos. El cliente de prueba ve el primer proyecto del ingeniero de prueba. Se apagan con `DEMO_ACCOUNTS=false`.
 
 ## Patrones de diseño
 
@@ -110,8 +110,7 @@ Ninguna clave se guarda en el repositorio. En Render se configuran estas variabl
 | `JWT_EXPIRATION_HOURS` | Duración de la sesión (por defecto 12) |
 | `AI_SERVICE_URL`, `AI_API_KEY` | Dirección del servicio de IA y la clave compartida con él |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Crean la primera cuenta de administrador al arrancar |
-| `DEMO_ACCOUNTS` | `true` por defecto: crea las cinco cuentas de prueba con contraseñas aleatorias. Si el ingeniero o el estudiante de prueba no tienen proyectos, se les crean proyectos de ejemplo con el plano de la casa |
-| `DEMO_ENGINEER_PASSWORD`, `DEMO_STUDENT_PASSWORD` | Opcionales: fijan la contraseña de esas dos cuentas de prueba |
+| `DEMO_ACCOUNTS` | `true` por defecto: crea las cinco cuentas de prueba y les pone contraseñas aleatorias en cada arranque. Si el ingeniero o el estudiante de prueba no tienen proyectos, se les crean proyectos de ejemplo con el plano de la casa |
 | `COPILOT_DAILY_LIMIT`, `COPILOT_DAILY_LIMIT_STUDENT`, `RENDER_DAILY_LIMIT` | Preguntas al copiloto y renders con IA por usuario y por día (por defecto 60, 20 y 5) |
 | `FRONTEND_URL` | Dominios con permiso CORS (opcional; por defecto Vercel y `localhost:5173`) |
 
