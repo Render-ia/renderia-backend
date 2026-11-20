@@ -20,6 +20,7 @@ import com.renderia.renderia_backend.repository.FloorPlanRepository;
 import com.renderia.renderia_backend.repository.ProjectRepository;
 import com.renderia.renderia_backend.validation.ImageSignature;
 import com.renderia.renderia_backend.security.CurrentUser;
+import com.renderia.renderia_backend.security.FloorPlanImageSigner;
 
 /** Subir, listar, ver y borrar planos, siempre con los permisos del proyecto. */
 @Service
@@ -36,14 +37,26 @@ public class FloorPlanService {
     private final ProjectRepository projects;
     private final ProjectService projectService;
     private final String publicUrl;
+    private final FloorPlanImageSigner signer;
 
     public FloorPlanService(FloorPlanRepository plans, FloorPlanFileRepository files, ProjectRepository projects,
-                            ProjectService projectService, @Value("${app.public-url}") String publicUrl) {
+                            ProjectService projectService, @Value("${app.public-url}") String publicUrl,
+                            FloorPlanImageSigner signer) {
         this.plans = plans;
         this.files = files;
         this.projects = projects;
         this.projectService = projectService;
         this.publicUrl = publicUrl.replaceAll("/+$", "");
+        this.signer = signer;
+    }
+
+    /** Enlace firmado y temporal de la imagen, el único que sale del backend. */
+    public String imageUrl(FloorPlan plan) {
+        return signer.signedUrl(plan.getId());
+    }
+
+    private FloorPlanResponse toResponse(FloorPlan plan) {
+        return FloorPlanResponse.from(plan, imageUrl(plan));
     }
 
     /** Planos de todos los proyectos que el usuario puede ver, los más recientes primero. */
@@ -58,20 +71,20 @@ public class FloorPlanService {
                     .toList();
             result = accessible.isEmpty() ? List.of() : plans.findAllByProjectIdInOrderByUploadedAtDesc(accessible);
         }
-        return result.stream().map(FloorPlanResponse::from).toList();
+        return result.stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
     public List<FloorPlanResponse> listByProject(CurrentUser user, Long projectId) {
         projectService.findVisible(user, projectId);
         return plans.findAllByProjectIdOrderByFloorLevelAsc(projectId).stream()
-                .map(FloorPlanResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
     @Transactional(readOnly = true)
     public FloorPlanResponse get(CurrentUser user, Long id) {
-        return FloorPlanResponse.from(findVisible(user, id));
+        return toResponse(findVisible(user, id));
     }
 
     @Transactional
@@ -112,7 +125,7 @@ public class FloorPlanService {
 
         plan.setFileUrl(publicUrl + "/api/v1/floor-plans/" + plan.getId() + "/image");
         files.save(new FloorPlanFile(plan.getId(), contentType, content));
-        return FloorPlanResponse.from(plans.save(plan));
+        return toResponse(plans.save(plan));
     }
 
     @Transactional
@@ -120,9 +133,16 @@ public class FloorPlanService {
         plans.delete(findManageable(user, id));
     }
 
-    /** Imagen del plano, para mostrarla en el navegador y para que la IA la analice. */
+    /**
+     * Imagen del plano, para mostrarla en el navegador y para que la IA la analice.
+     * Solo se entrega con un enlace firmado vigente; si la firma no sirve responde 404
+     * para no confirmar qué ids existen.
+     */
     @Transactional(readOnly = true)
-    public FloorPlanFile image(Long id) {
+    public FloorPlanFile image(Long id, Long expires, String signature) {
+        if (!signer.isValid(id, expires, signature)) {
+            throw ApiException.notFound("El enlace de la imagen no es válido o venció. Recarga la página.");
+        }
         return files.findById(id).orElseThrow(() -> ApiException.notFound("El plano no tiene imagen."));
     }
 

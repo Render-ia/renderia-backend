@@ -24,6 +24,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 
 import com.renderia.renderia_backend.model.User;
 import com.renderia.renderia_backend.repository.UserRepository;
@@ -32,7 +33,8 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Reglas de acceso de la API:
- * - Públicas: hello, health, login, registro, acceso a las cuentas de prueba, la lectura de catálogos y las imágenes de los planos.
+ * - Públicas: hello, health, login, registro, acceso a las cuentas de prueba y la lectura de catálogos.
+ * - Imágenes de planos: sin token, pero solo con el enlace firmado que entrega la API.
  * - Solo administrador: crear, editar o borrar catálogos y modelos de IA, y gestionar usuarios.
  * - Todo lo demás exige un token válido (Authorization: Bearer ...).
  */
@@ -47,7 +49,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, UserRepository users) throws Exception {
         http
+            // Sin cookies de sesión (el token va en Authorization), así que CSRF no aplica.
             .csrf(csrf -> csrf.disable())
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.deny())
+                .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                .httpStrictTransportSecurity(hsts -> hsts.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
             .cors(Customizer.withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth

@@ -13,12 +13,13 @@ public record FloorPlanResponse(
         String scale,
         Instant uploadedAt) {
 
-    public static FloorPlanResponse from(FloorPlan plan) {
+    /** imageUrl es el enlace firmado de FloorPlanImageSigner, no el que está guardado en la tabla. */
+    public static FloorPlanResponse from(FloorPlan plan, String imageUrl) {
         return new FloorPlanResponse(
                 plan.getId(),
                 plan.getProjectId(),
                 plan.getFileName(),
-                plan.getFileUrl(),
+                imageUrl,
                 plan.getFloorLevel(),
                 plan.getScale(),
                 plan.getUploadedAt());

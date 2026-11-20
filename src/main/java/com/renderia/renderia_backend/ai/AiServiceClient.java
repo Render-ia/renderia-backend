@@ -2,6 +2,7 @@ package com.renderia.renderia_backend.ai;
 
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -133,10 +134,53 @@ public class AiServiceClient {
         log.warn("El servicio de IA no despertó; se intenta el análisis de todos modos");
     }
 
-    private AiServiceResponse send(Map<String, Object> body) {
+    /**
+     * Sends a JSON request to another endpoint of the AI service (copilot,
+     * render) and returns its JSON answer. It wakes the service first, like
+     * the analysis, but does not retry: these calls are interactive.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> postJson(String path, Map<String, Object> body) {
+        wakeUpIfNeeded();
         try {
-            AiServiceResponse response = client.post()
-                    .uri("/analyze")
+            Map<String, Object> response = post(path, body, Map.class, "El servicio de IA no pudo responder");
+            lastHealthyAt = System.currentTimeMillis();
+            if (response == null) {
+                throw new ApiException(HttpStatus.BAD_GATEWAY, "El servicio de IA respondió vacío.");
+            }
+            return response;
+        } catch (PlatformUnavailableException e) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "El servicio de IA está despertando. Espera un minuto e inténtalo de nuevo.");
+        }
+    }
+
+    /** What the AI service can do right now (Gemini on or off, renders, daily usage). Never contains keys. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> capabilities() {
+        try {
+            Map<String, Object> answer = healthClient.get().uri("/capabilities").retrieve().body(Map.class);
+            return answer == null ? Map.of() : answer;
+        } catch (RestClientException e) {
+            log.info("No se pudo leer /capabilities del servicio de IA: {}", e.getMessage());
+            return Map.of("gemini", Map.of("configured", false), "render", Map.of("enabled", false), "reachable", false,
+                    "notes", List.of("El servicio de IA no responde en este momento."));
+        }
+    }
+
+    private AiServiceResponse send(Map<String, Object> body) {
+        AiServiceResponse response = post("/analyze", body, AiServiceResponse.class,
+                "El servicio de IA no pudo analizar el plano");
+        if (response == null || response.elements() == null) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "El servicio de IA respondió sin elementos.");
+        }
+        return response;
+    }
+
+    private <T> T post(String path, Map<String, Object> body, Class<T> type, String failure) {
+        try {
+            return client.post()
+                    .uri(path)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-API-Key", apiKey)
                     .body(body)
@@ -152,14 +196,9 @@ public class AiServiceClient {
                         if (code == 429 || code == 502 || code == 503 || code == 504) {
                             throw new PlatformUnavailableException(code);
                         }
-                        throw new ApiException(HttpStatus.BAD_GATEWAY,
-                                "El servicio de IA no pudo analizar el plano (código " + code + ").");
+                        throw new ApiException(HttpStatus.BAD_GATEWAY, failure + " (código " + code + ").");
                     })
-                    .body(AiServiceResponse.class);
-            if (response == null || response.elements() == null) {
-                throw new ApiException(HttpStatus.BAD_GATEWAY, "El servicio de IA respondió sin elementos.");
-            }
-            return response;
+                    .body(type);
         } catch (ResourceAccessException e) {
             log.warn("No se pudo conectar con el servicio de IA: {}", e.getMessage());
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
