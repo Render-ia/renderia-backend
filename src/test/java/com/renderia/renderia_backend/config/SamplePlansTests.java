@@ -21,10 +21,11 @@ import tools.jackson.databind.json.JsonMapper;
 class SamplePlansTests {
 
     private static final ObjectMapper JSON = JsonMapper.builder().build();
-    private static final String[] PLANS = {"house-floor-plan", "apartment-building-floor-plan", "school-floor-plan",
-        "health-center-floor-plan", "retail-store-floor-plan", "warehouse-floor-plan"};
-    private static final String[] ANALYZED = {"house-floor-plan", "apartment-building-floor-plan", "school-floor-plan",
-        "health-center-floor-plan", "warehouse-floor-plan"};
+    private static final String[] ANALYZED = {"house-floor-plan", "house-second-floor-plan",
+        "apartment-building-ground-floor-plan", "apartment-building-floor-plan", "school-floor-plan",
+        "school-second-floor-plan", "health-center-floor-plan", "health-center-second-floor-plan", "warehouse-floor-plan"};
+    private static final String[] PLANS = java.util.stream.Stream.concat(java.util.Arrays.stream(ANALYZED),
+        java.util.stream.Stream.of("retail-store-floor-plan")).toArray(String[]::new);
 
     private static byte[] read(String file) throws IOException {
         try (InputStream input = new ClassPathResource("samples/" + file).getInputStream()) {
@@ -51,11 +52,31 @@ class SamplePlansTests {
     }
 
     @Test
-    void eachSampleIsADifferentBuilding() throws IOException {
+    void eachBuildingHasItsOwnFootprint() throws IOException {
         Set<String> sizes = new HashSet<>();
-        for (String plan : ANALYZED) {
+        for (String plan : new String[] {"house-floor-plan", "apartment-building-floor-plan", "school-floor-plan",
+            "health-center-floor-plan", "warehouse-floor-plan"}) {
             sizes.add(JSON.readTree(read(plan + ".analysis.json")).get("summary").get("buildingSizeM").toString());
         }
-        assertEquals(ANALYZED.length, sizes.size());
+        assertEquals(5, sizes.size());
+    }
+
+    @Test
+    void floorsOfTheSameBuildingLineUp() throws IOException {
+        String[][] buildings = {{"apartment-building-ground-floor-plan", "apartment-building-floor-plan"},
+            {"school-floor-plan", "school-second-floor-plan"},
+            {"health-center-floor-plan", "health-center-second-floor-plan"}};
+        for (String[] floors : buildings) {
+            assertEquals(slab(floors[0]), slab(floors[1]), floors[1]);
+        }
+    }
+
+    private static String slab(String plan) throws IOException {
+        for (JsonNode element : JSON.readTree(read(plan + ".analysis.json")).get("elements")) {
+            if ("Losa".equals(element.path("type").asString())) {
+                return element.path("startX").asDouble() + "," + element.path("startY").asDouble();
+            }
+        }
+        return "";
     }
 }

@@ -68,9 +68,13 @@ public class DemoDataInitializer implements ApplicationRunner {
     /** A sample plan in resources/samples; analyzed = it ships with its stored analysis. */
     private enum SamplePlan {
         HOUSE("house-floor-plan", true),
+        HOUSE_SECOND_FLOOR("house-second-floor-plan", true),
+        APARTMENT_GROUND_FLOOR("apartment-building-ground-floor-plan", true),
         APARTMENT_BUILDING("apartment-building-floor-plan", true),
         SCHOOL("school-floor-plan", true),
+        SCHOOL_SECOND_FLOOR("school-second-floor-plan", true),
         HEALTH_CENTER("health-center-floor-plan", true),
+        HEALTH_CENTER_SECOND_FLOOR("health-center-second-floor-plan", true),
         RETAIL_STORE("retail-store-floor-plan", false),
         WAREHOUSE("warehouse-floor-plan", true);
 
@@ -83,33 +87,42 @@ public class DemoDataInitializer implements ApplicationRunner {
         }
     }
 
+    /**
+     * A sample project; floors.get(0) is floor 1, floors.get(1) floor 2, and so on.
+     * A building can repeat the same plan on several floors (typical floor).
+     */
     private record SampleProject(String ownerRole, String name, String buildingType, String location,
-                                 String description, SamplePlan plan, boolean sharedWithClient) {
+                                 String description, List<SamplePlan> floors, boolean sharedWithClient) {
+    }
+
+    private static List<SamplePlan> floors(SamplePlan... plans) {
+        return List.of(plans);
     }
 
     private static final List<SampleProject> SAMPLES = List.of(
             new SampleProject(Role.ENGINEER, "Casa Los Andes", "Vivienda unifamiliar", "Pasto, Nariño",
-                    "Vivienda de un piso con dos habitaciones, sala comedor, cocina y baño.",
-                    SamplePlan.HOUSE, true),
+                    "Casa de dos pisos: zona social abajo y tres alcobas con estudio arriba.",
+                    floors(SamplePlan.HOUSE, SamplePlan.HOUSE_SECOND_FLOOR), true),
             new SampleProject(Role.ENGINEER, "Edificio Mirador del Volcán", "Edificio residencial", "Pasto, Nariño",
-                    "Planta tipo de un edificio de apartamentos: dos apartamentos por piso y punto fijo central.",
-                    SamplePlan.APARTMENT_BUILDING, true),
+                    "Edificio de seis pisos: locales y portería en el primero, dos apartamentos por piso del segundo al sexto.",
+                    floors(SamplePlan.APARTMENT_GROUND_FLOOR, SamplePlan.APARTMENT_BUILDING, SamplePlan.APARTMENT_BUILDING,
+                            SamplePlan.APARTMENT_BUILDING, SamplePlan.APARTMENT_BUILDING, SamplePlan.APARTMENT_BUILDING), true),
             new SampleProject(Role.ENGINEER, "Centro de Salud San Rafael", "Centro de salud", "Ipiales, Nariño",
-                    "Consultorios, urgencias, laboratorio y farmacia a lado y lado de un pasillo central.",
-                    SamplePlan.HEALTH_CENTER, false),
+                    "Dos pisos: consultorios, urgencias y farmacia abajo; hospitalización arriba.",
+                    floors(SamplePlan.HEALTH_CENTER, SamplePlan.HEALTH_CENTER_SECOND_FLOOR), false),
             new SampleProject(Role.ENGINEER, "Local Avenida Panamericana", "Local comercial", "Pasto, Nariño",
                     "Local con vitrina al frente, depósito y baño. Listo para analizar con IA en vivo.",
-                    SamplePlan.RETAIL_STORE, false),
+                    floors(SamplePlan.RETAIL_STORE), false),
             new SampleProject(Role.STUDENT, "Taller de estructuras: casa tipo", "Vivienda unifamiliar",
                     "Universidad Cooperativa, Pasto",
                     "Ejercicio de clase para identificar muros, columnas y vigas.",
-                    SamplePlan.HOUSE, false),
+                    floors(SamplePlan.HOUSE), false),
             new SampleProject(Role.STUDENT, "Colegio Los Pinos", "Institución educativa", "Túquerres, Nariño",
-                    "Cuatro aulas a lo largo de un corredor cubierto.",
-                    SamplePlan.SCHOOL, false),
+                    "Dos pisos: cuatro aulas abajo; laboratorio, biblioteca y sala de profesores arriba.",
+                    floors(SamplePlan.SCHOOL, SamplePlan.SCHOOL_SECOND_FLOOR), false),
             new SampleProject(Role.ADMIN, "Bodega Parque Industrial", "Bodega", "Pasto, Nariño",
                     "Nave de gran luz con columnas cada 6 m y oficina en una esquina.",
-                    SamplePlan.WAREHOUSE, false));
+                    floors(SamplePlan.WAREHOUSE), false));
 
     private final UserRepository users;
     private final ProjectRepository projects;
@@ -167,10 +180,15 @@ public class DemoDataInitializer implements ApplicationRunner {
             return;
         }
         List<FloorPlan> plans = floorPlans.findAllByProjectIdOrderByFloorLevelAsc(project.getId());
-        FloorPlan plan = plans.isEmpty() ? addPlan(project, sample.plan()) : plans.get(0);
-        if (sample.plan().analyzed && plan.getFileName().equals(sample.plan().file + ".svg")
-                && !analyses.existsByFloorPlanIdAndStatus(plan.getId(), AnalysisStatus.COMPLETED)) {
-            addStoredAnalysis(plan, sample.plan());
+        for (int level = 1; level <= sample.floors().size(); level++) {
+            SamplePlan floor = sample.floors().get(level - 1);
+            int wanted = level;
+            FloorPlan plan = plans.stream().filter(p -> p.getFloorLevel() == wanted).findFirst()
+                    .orElseGet(() -> addPlan(project, floor, wanted));
+            if (floor.analyzed && plan.getFileName().equals(floor.file + ".svg")
+                    && !analyses.existsByFloorPlanIdAndStatus(plan.getId(), AnalysisStatus.COMPLETED)) {
+                addStoredAnalysis(plan, floor);
+            }
         }
         if (sample.sharedWithClient()) {
             shareWithDemoClient(project);
@@ -181,7 +199,13 @@ public class DemoDataInitializer implements ApplicationRunner {
         List<Project> owned = projects.findAllByUserIdOrderByCreatedAtDesc(owner.getId());
         Optional<Project> existing = owned.stream().filter(p -> p.getName().equals(sample.name())).findFirst();
         if (existing.isPresent()) {
-            return existing.get();
+            // Keep the sample text in step with its floors (the sample can gain floors over time).
+            Project project = existing.get();
+            if (!sample.description().equals(project.getDescription())) {
+                project.setDescription(sample.description());
+                return projects.save(project);
+            }
+            return project;
         }
         // Students keep their project limit even for sample data.
         if (Role.STUDENT.equals(sample.ownerRole()) && owned.size() >= StudentPolicy.MAX_PROJECTS) {
@@ -201,11 +225,11 @@ public class DemoDataInitializer implements ApplicationRunner {
         return projects.save(project);
     }
 
-    private FloorPlan addPlan(Project project, SamplePlan sample) {
+    private FloorPlan addPlan(Project project, SamplePlan sample, int floorLevel) {
         FloorPlan plan = new FloorPlan();
         plan.setProjectId(project.getId());
         plan.setFileName(sample.file + ".svg");
-        plan.setFloorLevel(1);
+        plan.setFloorLevel(floorLevel);
         plan.setScale("1:100");
         plan.setFileUrl("");
         plan = floorPlans.saveAndFlush(plan);
