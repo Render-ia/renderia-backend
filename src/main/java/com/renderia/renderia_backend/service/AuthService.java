@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.renderia.renderia_backend.validation.InputValidator;
+import com.renderia.renderia_backend.config.DemoAccountsInitializer;
 import com.renderia.renderia_backend.dto.AuthResponse;
+import com.renderia.renderia_backend.dto.DemoLoginRequest;
 import com.renderia.renderia_backend.dto.LoginRequest;
 import com.renderia.renderia_backend.dto.RegisterRequest;
 import com.renderia.renderia_backend.dto.UserResponse;
@@ -87,6 +89,25 @@ public class AuthService {
         if (!user.isActive()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Tu cuenta está desactivada. Contacta al administrador.");
         }
+        return new AuthResponse(jwtService.generateToken(user), UserResponse.from(user));
+    }
+
+    /**
+     * Entrada directa a las cuentas de prueba (botones del login). Así el frontend
+     * no necesita conocer sus contraseñas. Solo funciona si la cuenta fue creada
+     * con DEMO_ENGINEER_PASSWORD o DEMO_STUDENT_PASSWORD y sigue activa.
+     */
+    @Transactional(readOnly = true)
+    public AuthResponse demoLogin(DemoLoginRequest request) {
+        String role = request == null || request.role() == null ? "" : request.role().trim();
+        String email = switch (role) {
+            case Role.ENGINEER -> DemoAccountsInitializer.ENGINEER_EMAIL;
+            case Role.STUDENT -> DemoAccountsInitializer.STUDENT_EMAIL;
+            default -> throw ApiException.badRequest("Solo hay cuentas de prueba de Ingeniero y Estudiante.");
+        };
+        User user = users.findByEmailIgnoreCase(email)
+                .filter(User::isActive)
+                .orElseThrow(() -> ApiException.notFound("La cuenta de prueba de " + role + " no está habilitada."));
         return new AuthResponse(jwtService.generateToken(user), UserResponse.from(user));
     }
 
