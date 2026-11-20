@@ -20,9 +20,16 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 @Configuration
 public class JwtKeyConfig {
 
+    /** Valor por defecto de app.jwt.secret en application.properties, solo para trabajar en local. */
+    static final String DEVELOPMENT_SECRET = "renderia-local-development-secret-change-me";
+
     private final SecretKey key;
 
     public JwtKeyConfig(@Value("${app.jwt.secret}") String secret) {
+        // En Render (variable RENDER) nunca se arranca con la clave de desarrollo del repositorio.
+        if (System.getenv("RENDER") != null && secret.equals(DEVELOPMENT_SECRET)) {
+            throw new IllegalStateException("Define JWT_SECRET en Render: no se puede usar la clave de desarrollo.");
+        }
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         if (bytes.length < 32) {
             throw new IllegalStateException("JWT_SECRET debe tener al menos 32 caracteres.");
