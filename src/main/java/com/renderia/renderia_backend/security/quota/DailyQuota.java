@@ -37,6 +37,13 @@ public class DailyQuota {
         }
     }
 
+    /** Returns one unit taken today, for a call that failed before doing any work (the AI did not answer). */
+    public void giveBack(String key) {
+        LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+        usage.computeIfPresent(key, (k, current) ->
+                current.day().equals(today) && current.count() > 0 ? new Usage(today, current.count() - 1) : current);
+    }
+
     /** Units still available today for the key. */
     public int remaining(String key, int limit) {
         LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));

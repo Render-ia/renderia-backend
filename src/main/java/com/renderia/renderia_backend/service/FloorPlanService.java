@@ -27,7 +27,7 @@ import com.renderia.renderia_backend.security.FloorPlanImageSigner;
 public class FloorPlanService {
 
     private static final Set<String> ALLOWED_TYPES = Set.of("image/png", "image/jpeg", "image/webp", "image/svg+xml");
-    private static final Pattern SCALE = Pattern.compile("^1:\\d{1,5}$");
+    private static final Pattern SCALE = Pattern.compile("^1:[1-9]\\d{0,4}$");
     /** Los números negativos son sótanos, igual que en el formulario del frontend. */
     private static final int MIN_FLOOR_LEVEL = -5;
     private static final int MAX_FLOOR_LEVEL = 200;

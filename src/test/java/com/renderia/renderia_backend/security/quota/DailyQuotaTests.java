@@ -85,4 +85,22 @@ class DailyQuotaTests {
             return now;
         }
     }
+
+    @Test
+    void aFailedCallGivesItsUnitBack() {
+        DailyQuota quota = new DailyQuota(Clock.fixed(MORNING, ZoneOffset.UTC));
+        quota.take("copilot:1", 2, "límite");
+        quota.giveBack("copilot:1");
+        assertThat(quota.remaining("copilot:1", 2)).isEqualTo(2);
+    }
+
+    @Test
+    void givingBackNeverGoesBelowZero() {
+        DailyQuota quota = new DailyQuota(Clock.fixed(MORNING, ZoneOffset.UTC));
+        quota.giveBack("copilot:1");
+        quota.take("copilot:1", 1, "límite");
+        quota.giveBack("copilot:1");
+        quota.giveBack("copilot:1");
+        assertThat(quota.remaining("copilot:1", 1)).isEqualTo(1);
+    }
 }
