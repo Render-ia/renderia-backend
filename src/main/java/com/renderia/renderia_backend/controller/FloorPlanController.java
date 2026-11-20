@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.renderia.renderia_backend.dto.FloorPlanResponse;
 import com.renderia.renderia_backend.model.FloorPlanFile;
 import com.renderia.renderia_backend.security.CurrentUser;
+import com.renderia.renderia_backend.security.FloorPlanImageSigner;
 import com.renderia.renderia_backend.service.FloorPlanService;
 
 @RestController
@@ -28,9 +29,11 @@ import com.renderia.renderia_backend.service.FloorPlanService;
 public class FloorPlanController {
 
     private final FloorPlanService service;
+    private final FloorPlanImageSigner imageSigner;
 
-    public FloorPlanController(FloorPlanService service) {
+    public FloorPlanController(FloorPlanService service, FloorPlanImageSigner imageSigner) {
         this.service = service;
+        this.imageSigner = imageSigner;
     }
 
     @GetMapping("/floor-plans")
@@ -65,15 +68,18 @@ public class FloorPlanController {
     }
 
     /**
-     * Imagen del plano. Es pública para que funcione dentro de una etiqueta img;
-     * la política de seguridad impide que un SVG ejecute código.
+     * Imagen del plano. No pide token para que funcione dentro de una etiqueta img y
+     * para que la IA la descargue, pero exige el enlace firmado (exp + sig) que entrega
+     * la API. La política de seguridad impide que un SVG ejecute código.
      */
     @GetMapping("/floor-plans/{id}/image")
-    public ResponseEntity<byte[]> image(@PathVariable Long id) {
-        FloorPlanFile file = service.image(id);
+    public ResponseEntity<byte[]> image(@PathVariable Long id,
+                                        @RequestParam(required = false) Long exp,
+                                        @RequestParam(required = false) String sig) {
+        FloorPlanFile file = service.image(id, exp, sig);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(file.getContentType()))
-                .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePublic())
+                .cacheControl(CacheControl.maxAge(Duration.ofSeconds(imageSigner.secondsUntil(exp))).cachePrivate())
                 .header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
                 .header("X-Content-Type-Options", "nosniff")
                 .body(file.getData());

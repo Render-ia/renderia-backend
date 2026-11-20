@@ -1,10 +1,12 @@
 package com.renderia.renderia_backend.exception;
 
 import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -22,7 +24,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, String>> handleApi(ApiException e) {
-        return ResponseEntity.status(e.getStatus()).body(Map.of("message", e.getMessage()));
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(e.getStatus());
+        if (e instanceof TooManyRequestsException limited) {
+            response.header(HttpHeaders.RETRY_AFTER, String.valueOf(limited.getRetryAfterSeconds()));
+        }
+        return response.body(Map.of("message", e.getMessage()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -31,16 +37,20 @@ public class GlobalExceptionHandler {
                 .body(Map.of("message", "El cuerpo de la petición no es válido."));
     }
 
-    /** Cualquier otro error: queda en el log con el detalle y el usuario recibe un mensaje claro. */
+    /**
+     * Cualquier otro error: el detalle queda solo en el log, con un código para buscarlo.
+     * Al cliente nunca se le envía el nombre ni el mensaje de la excepción, porque pueden
+     * revelar tablas, rutas o datos internos.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleUnexpected(Exception e) throws Exception {
         if (e instanceof org.springframework.web.ErrorResponse || e instanceof org.springframework.security.access.AccessDeniedException
                 || e instanceof org.springframework.security.core.AuthenticationException) {
             throw e;
         }
-        log.error("Error inesperado", e);
+        String reference = UUID.randomUUID().toString().substring(0, 8);
+        log.error("Error inesperado [ref {}]", reference, e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("message", "Error interno del servidor: " + e.getClass().getSimpleName()
-                        + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")")));
+                .body(Map.of("message", "Ocurrió un error inesperado. Si se repite, reporta el código " + reference + "."));
     }
 }
