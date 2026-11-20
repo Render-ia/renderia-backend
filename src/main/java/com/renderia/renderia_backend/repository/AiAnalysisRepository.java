@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.renderia.renderia_backend.model.AiAnalysis;
+import com.renderia.renderia_backend.model.AnalysisStatus;
 
 public interface AiAnalysisRepository extends JpaRepository<AiAnalysis, Long> {
 
@@ -22,4 +23,6 @@ public interface AiAnalysisRepository extends JpaRepository<AiAnalysis, Long> {
             ORDER BY a.createdAt DESC
             """)
     List<AiAnalysis> findAllOfUser(@Param("userId") Long userId);
+
+    boolean existsByFloorPlanIdAndStatus(Long floorPlanId, AnalysisStatus status);
 }

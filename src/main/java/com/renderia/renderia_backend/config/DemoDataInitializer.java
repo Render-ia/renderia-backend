@@ -3,6 +3,9 @@ package com.renderia.renderia_backend.config;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,48 +15,101 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
+import com.renderia.renderia_backend.model.AiAnalysis;
+import com.renderia.renderia_backend.model.AiModel;
+import com.renderia.renderia_backend.model.AnalysisStatus;
 import com.renderia.renderia_backend.model.BuildingType;
+import com.renderia.renderia_backend.model.CatalogEntity;
 import com.renderia.renderia_backend.model.FloorPlan;
 import com.renderia.renderia_backend.model.FloorPlanFile;
+import com.renderia.renderia_backend.model.Model3D;
 import com.renderia.renderia_backend.model.Project;
 import com.renderia.renderia_backend.model.ProjectMember;
 import com.renderia.renderia_backend.model.Role;
+import com.renderia.renderia_backend.model.StructuralElement;
 import com.renderia.renderia_backend.model.User;
+import com.renderia.renderia_backend.repository.AiAnalysisRepository;
+import com.renderia.renderia_backend.repository.AiModelRepository;
 import com.renderia.renderia_backend.repository.BuildingTypeRepository;
+import com.renderia.renderia_backend.repository.ElementTypeRepository;
 import com.renderia.renderia_backend.repository.FloorPlanFileRepository;
 import com.renderia.renderia_backend.repository.FloorPlanRepository;
+import com.renderia.renderia_backend.repository.MaterialRepository;
+import com.renderia.renderia_backend.repository.Model3DRepository;
 import com.renderia.renderia_backend.repository.ProjectMemberRepository;
 import com.renderia.renderia_backend.repository.ProjectRepository;
+import com.renderia.renderia_backend.repository.StructuralElementRepository;
 import com.renderia.renderia_backend.repository.UserRepository;
 import com.renderia.renderia_backend.security.DemoAccounts;
+import com.renderia.renderia_backend.security.policy.StudentPolicy;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Proyectos de ejemplo para las cuentas de prueba. Si una cuenta de prueba no
- * tiene proyectos, se le crean con el plano de la casa de ejemplo ya subido,
- * listo para analizar con IA durante la sustentación.
+ * Sample projects for the demo accounts, each with a different kind of building
+ * (house, apartment building, school, health center, retail store, warehouse) so
+ * the 3D viewer shows different models. Most come already analyzed with the
+ * local vision detector (the result is stored next to the plan in
+ * resources/samples), and one is left without analysis so the full cycle can be
+ * run live. Missing projects, plans, analyses and shares are added on every
+ * start; nothing that already exists is changed.
  */
 @Component
 @Order(20)
 public class DemoDataInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoDataInitializer.class);
-    private static final String SAMPLE_PLAN = "samples/house-floor-plan.svg";
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
+    private static final String LOCAL_VISION = "local-vision";
 
-    /** Proyecto de ejemplo: nombre, tipo de edificación, ubicación, descripción y si trae plano. */
-    private record SampleProject(String name, String buildingType, String location, String description, boolean withPlan) {
+    /** A sample plan in resources/samples; analyzed = it ships with its stored analysis. */
+    private enum SamplePlan {
+        HOUSE("house-floor-plan", true),
+        APARTMENT_BUILDING("apartment-building-floor-plan", true),
+        SCHOOL("school-floor-plan", true),
+        HEALTH_CENTER("health-center-floor-plan", true),
+        RETAIL_STORE("retail-store-floor-plan", false),
+        WAREHOUSE("warehouse-floor-plan", true);
+
+        final String file;
+        final boolean analyzed;
+
+        SamplePlan(String file, boolean analyzed) {
+            this.file = file;
+            this.analyzed = analyzed;
+        }
     }
 
-    private static final List<SampleProject> ENGINEER_PROJECTS = List.of(
-            new SampleProject("Casa Los Andes", "Vivienda unifamiliar", "Pasto, Nariño",
-                    "Vivienda de un piso con dos habitaciones, sala comedor, cocina y baño.", true),
-            new SampleProject("Local Avenida Panamericana", "Local comercial", "Pasto, Nariño",
-                    "Local de esquina en primer piso. Falta subir el plano.", false));
+    private record SampleProject(String ownerRole, String name, String buildingType, String location,
+                                 String description, SamplePlan plan, boolean sharedWithClient) {
+    }
 
-    private static final List<SampleProject> STUDENT_PROJECTS = List.of(
-            new SampleProject("Taller de estructuras: casa tipo", "Vivienda unifamiliar", "Universidad Cooperativa, Pasto",
-                    "Ejercicio de clase para identificar muros, columnas y vigas.", true));
+    private static final List<SampleProject> SAMPLES = List.of(
+            new SampleProject(Role.ENGINEER, "Casa Los Andes", "Vivienda unifamiliar", "Pasto, Nariño",
+                    "Vivienda de un piso con dos habitaciones, sala comedor, cocina y baño.",
+                    SamplePlan.HOUSE, true),
+            new SampleProject(Role.ENGINEER, "Edificio Mirador del Volcán", "Edificio residencial", "Pasto, Nariño",
+                    "Planta tipo de un edificio de apartamentos: dos apartamentos por piso y punto fijo central.",
+                    SamplePlan.APARTMENT_BUILDING, true),
+            new SampleProject(Role.ENGINEER, "Centro de Salud San Rafael", "Centro de salud", "Ipiales, Nariño",
+                    "Consultorios, urgencias, laboratorio y farmacia a lado y lado de un pasillo central.",
+                    SamplePlan.HEALTH_CENTER, false),
+            new SampleProject(Role.ENGINEER, "Local Avenida Panamericana", "Local comercial", "Pasto, Nariño",
+                    "Local con vitrina al frente, depósito y baño. Listo para analizar con IA en vivo.",
+                    SamplePlan.RETAIL_STORE, false),
+            new SampleProject(Role.STUDENT, "Taller de estructuras: casa tipo", "Vivienda unifamiliar",
+                    "Universidad Cooperativa, Pasto",
+                    "Ejercicio de clase para identificar muros, columnas y vigas.",
+                    SamplePlan.HOUSE, false),
+            new SampleProject(Role.STUDENT, "Colegio Los Pinos", "Institución educativa", "Túquerres, Nariño",
+                    "Cuatro aulas a lo largo de un corredor cubierto.",
+                    SamplePlan.SCHOOL, false),
+            new SampleProject(Role.ADMIN, "Bodega Parque Industrial", "Bodega", "Pasto, Nariño",
+                    "Nave de gran luz con columnas cada 6 m y oficina en una esquina.",
+                    SamplePlan.WAREHOUSE, false));
 
     private final UserRepository users;
     private final ProjectRepository projects;
@@ -61,89 +117,176 @@ public class DemoDataInitializer implements ApplicationRunner {
     private final FloorPlanRepository floorPlans;
     private final FloorPlanFileRepository floorPlanFiles;
     private final ProjectMemberRepository members;
+    private final AiModelRepository aiModels;
+    private final AiAnalysisRepository analyses;
+    private final StructuralElementRepository elements;
+    private final ElementTypeRepository elementTypes;
+    private final MaterialRepository materials;
+    private final Model3DRepository models3d;
     private final String publicUrl;
 
     public DemoDataInitializer(UserRepository users, ProjectRepository projects, BuildingTypeRepository buildingTypes,
                                FloorPlanRepository floorPlans, FloorPlanFileRepository floorPlanFiles,
-                               ProjectMemberRepository members, @Value("${app.public-url}") String publicUrl) {
+                               ProjectMemberRepository members, AiModelRepository aiModels,
+                               AiAnalysisRepository analyses, StructuralElementRepository elements,
+                               ElementTypeRepository elementTypes, MaterialRepository materials,
+                               Model3DRepository models3d, @Value("${app.public-url}") String publicUrl) {
         this.users = users;
         this.projects = projects;
         this.buildingTypes = buildingTypes;
         this.floorPlans = floorPlans;
         this.floorPlanFiles = floorPlanFiles;
         this.members = members;
+        this.aiModels = aiModels;
+        this.analyses = analyses;
+        this.elements = elements;
+        this.elementTypes = elementTypes;
+        this.materials = materials;
+        this.models3d = models3d;
         this.publicUrl = publicUrl.replaceAll("/+$", "");
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        try {
-            createSampleProjects(DemoAccounts.emailOf(Role.ENGINEER), ENGINEER_PROJECTS);
-            createSampleProjects(DemoAccounts.emailOf(Role.STUDENT), STUDENT_PROJECTS);
-            shareWithDemoClient(DemoAccounts.emailOf(Role.ENGINEER));
-        } catch (RuntimeException e) {
-            log.warn("No se pudieron crear los proyectos de ejemplo: {}", e.getMessage());
-        }
-    }
-
-    @Transactional
-    void createSampleProjects(String email, List<SampleProject> samples) {
-        User owner = users.findByEmailIgnoreCase(email).orElse(null);
-        if (owner == null || projects.countByUserId(owner.getId()) > 0) {
-            return;
-        }
-        byte[] planImage = readSamplePlan();
-        for (SampleProject sample : samples) {
-            Project project = new Project();
-            project.setUserId(owner.getId());
-            project.setName(sample.name());
-            project.setLocation(sample.location());
-            project.setDescription(sample.description());
-            project.setBuildingTypeId(buildingTypes.findAll().stream()
-                    .filter(type -> type.getName().equals(sample.buildingType()))
-                    .map(BuildingType::getId)
-                    .findFirst()
-                    .orElse(null));
-            project = projects.save(project);
-
-            if (sample.withPlan()) {
-                addSamplePlan(project, planImage);
+        for (SampleProject sample : SAMPLES) {
+            try {
+                ensureSample(sample);
+            } catch (RuntimeException e) {
+                log.warn("No se pudo preparar el proyecto de ejemplo \"{}\": {}", sample.name(), e.getMessage());
             }
         }
-        log.info("Proyectos de ejemplo creados para {}", email);
     }
 
-    /** The demo client sees the demo engineer's first project, as a real client would. */
-    @Transactional
-    void shareWithDemoClient(String ownerEmail) {
-        User owner = users.findByEmailIgnoreCase(ownerEmail).orElse(null);
-        User client = users.findByEmailIgnoreCase(DemoAccounts.emailOf(Role.CLIENT)).orElse(null);
-        if (owner == null || client == null || !members.findAllByUserId(client.getId()).isEmpty()) {
+    private void ensureSample(SampleProject sample) {
+        User owner = users.findByEmailIgnoreCase(DemoAccounts.emailOf(sample.ownerRole())).orElse(null);
+        if (owner == null) {
             return;
         }
-        projects.findAllByUserIdOrderByCreatedAtDesc(owner.getId()).stream()
-                .reduce((newer, older) -> older)
-                .ifPresent(project -> members.save(new ProjectMember(project.getId(), client.getId())));
+        Project project = findOrCreateProject(owner, sample);
+        if (project == null) {
+            return;
+        }
+        List<FloorPlan> plans = floorPlans.findAllByProjectIdOrderByFloorLevelAsc(project.getId());
+        FloorPlan plan = plans.isEmpty() ? addPlan(project, sample.plan()) : plans.get(0);
+        if (sample.plan().analyzed && plan.getFileName().equals(sample.plan().file + ".svg")
+                && !analyses.existsByFloorPlanIdAndStatus(plan.getId(), AnalysisStatus.COMPLETED)) {
+            addStoredAnalysis(plan, sample.plan());
+        }
+        if (sample.sharedWithClient()) {
+            shareWithDemoClient(project);
+        }
     }
 
-    private void addSamplePlan(Project project, byte[] image) {
+    private Project findOrCreateProject(User owner, SampleProject sample) {
+        List<Project> owned = projects.findAllByUserIdOrderByCreatedAtDesc(owner.getId());
+        Optional<Project> existing = owned.stream().filter(p -> p.getName().equals(sample.name())).findFirst();
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        // Students keep their project limit even for sample data.
+        if (Role.STUDENT.equals(sample.ownerRole()) && owned.size() >= StudentPolicy.MAX_PROJECTS) {
+            return null;
+        }
+        Project project = new Project();
+        project.setUserId(owner.getId());
+        project.setName(sample.name());
+        project.setLocation(sample.location());
+        project.setDescription(sample.description());
+        project.setBuildingTypeId(buildingTypes.findAll().stream()
+                .filter(type -> type.getName().equals(sample.buildingType()))
+                .map(BuildingType::getId)
+                .findFirst()
+                .orElse(null));
+        log.info("Proyecto de ejemplo creado: {}", sample.name());
+        return projects.save(project);
+    }
+
+    private FloorPlan addPlan(Project project, SamplePlan sample) {
         FloorPlan plan = new FloorPlan();
         plan.setProjectId(project.getId());
-        plan.setFileName("house-floor-plan.svg");
+        plan.setFileName(sample.file + ".svg");
         plan.setFloorLevel(1);
         plan.setScale("1:100");
         plan.setFileUrl("");
         plan = floorPlans.saveAndFlush(plan);
         plan.setFileUrl(publicUrl + "/api/v1/floor-plans/" + plan.getId() + "/image");
-        floorPlans.save(plan);
-        floorPlanFiles.save(new FloorPlanFile(plan.getId(), "image/svg+xml", image));
+        plan = floorPlans.save(plan);
+        floorPlanFiles.save(new FloorPlanFile(plan.getId(), "image/svg+xml", read(sample.file + ".svg")));
+        return plan;
     }
 
-    private static byte[] readSamplePlan() {
-        try (InputStream input = new ClassPathResource(SAMPLE_PLAN).getInputStream()) {
+    /** Saves the analysis the local vision detector gives for this plan (same elements and summary). */
+    private void addStoredAnalysis(FloorPlan plan, SamplePlan sample) {
+        AiModel model = aiModels.findAll().stream()
+                .filter(m -> LOCAL_VISION.equals(m.getProvider()))
+                .findFirst()
+                .orElse(null);
+        if (model == null) {
+            return;
+        }
+        JsonNode stored = JSON.readTree(read(sample.file + ".analysis.json"));
+        Map<String, Long> typeIds = idsByName(elementTypes.findAll());
+        Map<String, Long> materialIds = idsByName(materials.findAll());
+
+        AiAnalysis analysis = new AiAnalysis();
+        analysis.setFloorPlanId(plan.getId());
+        analysis.setAiModelId(model.getId());
+        analysis.setStatus(AnalysisStatus.COMPLETED);
+        analysis.setRawResponse(JSON.writeValueAsString(stored.get("summary")));
+        analysis.setDurationMs(900);
+        analysis = analyses.save(analysis);
+
+        int count = 0;
+        for (JsonNode node : stored.get("elements")) {
+            Long typeId = typeIds.get(node.path("type").asString());
+            if (typeId == null) {
+                continue;
+            }
+            StructuralElement element = new StructuralElement();
+            element.setAiAnalysisId(analysis.getId());
+            element.setElementTypeId(typeId);
+            element.setMaterialId(node.path("material").isString() ? materialIds.get(node.path("material").asString()) : null);
+            element.setStartX(number(node, "startX"));
+            element.setStartY(number(node, "startY"));
+            element.setEndX(number(node, "endX"));
+            element.setEndY(number(node, "endY"));
+            element.setWidth(number(node, "width"));
+            element.setHeight(number(node, "height"));
+            element.setThickness(number(node, "thickness"));
+            element.setConfidence(number(node, "confidence"));
+            elements.save(element);
+            count++;
+        }
+
+        Model3D model3d = new Model3D();
+        model3d.setFloorPlanId(plan.getId());
+        model3d.setAiAnalysisId(analysis.getId());
+        model3d.setFormat("GLB");
+        model3d.setElementCount(count);
+        models3d.save(model3d);
+        log.info("Análisis de ejemplo guardado para {} ({} elementos)", sample.file, count);
+    }
+
+    private void shareWithDemoClient(Project project) {
+        users.findByEmailIgnoreCase(DemoAccounts.emailOf(Role.CLIENT))
+                .filter(client -> !members.existsByProjectIdAndUserId(project.getId(), client.getId()))
+                .ifPresent(client -> members.save(new ProjectMember(project.getId(), client.getId())));
+    }
+
+    private static Map<String, Long> idsByName(List<? extends CatalogEntity> rows) {
+        return rows.stream().collect(Collectors.toMap(CatalogEntity::getName, CatalogEntity::getId, (a, b) -> a));
+    }
+
+    private static Double number(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? null : value.asDouble();
+    }
+
+    private static byte[] read(String file) {
+        try (InputStream input = new ClassPathResource("samples/" + file).getInputStream()) {
             return input.readAllBytes();
         } catch (IOException e) {
-            throw new IllegalStateException("No se encontró el plano de ejemplo " + SAMPLE_PLAN, e);
+            throw new IllegalStateException("No se encontró el archivo de ejemplo " + file, e);
         }
     }
 }
