@@ -17,4 +17,9 @@ public class AdminPolicy implements RolePolicy {
     public int projectLimit() {
         return Integer.MAX_VALUE;
     }
+
+    @Override
+    public boolean canReviewAnyProject() {
+        return true;
+    }
 }

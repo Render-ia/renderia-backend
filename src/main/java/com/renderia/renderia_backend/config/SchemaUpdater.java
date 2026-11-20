@@ -51,7 +51,25 @@ public class SchemaUpdater implements ApplicationRunner {
         "CREATE INDEX IF NOT EXISTS idx_ai_analyses_floor_plan_id ON ai_analyses(floor_plan_id)",
         "CREATE INDEX IF NOT EXISTS idx_structural_elements_analysis_id ON structural_elements(ai_analysis_id)",
         "CREATE INDEX IF NOT EXISTS idx_models_3d_analysis_id ON models_3d(ai_analysis_id)",
-        "CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id)"
+        "CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id)",
+        // 005: Reviewer and Client roles.
+        """
+        INSERT INTO roles (name, description) VALUES
+            ('Revisor', 'Revisa y valida los proyectos de todos, sin borrar'),
+            ('Cliente', 'Ve los proyectos que le comparten, en modo cliente')
+        ON CONFLICT (name) DO NOTHING
+        """,
+        // 006: projects shared with other users (read access).
+        """
+        CREATE TABLE IF NOT EXISTS project_members (
+            id         BIGSERIAL PRIMARY KEY,
+            project_id BIGINT    NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            user_id    BIGINT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (project_id, user_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_project_members_user_id ON project_members(user_id)"
     };
 
     private final JdbcTemplate jdbc;

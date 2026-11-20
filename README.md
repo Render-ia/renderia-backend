@@ -40,7 +40,8 @@ Todas las rutas empiezan por `/api/v1`. El contrato completo que usa el frontend
 |---|---|---|---|
 | GET | `/hello` | Público | Nombre del proyecto e integrantes |
 | GET | `/health` | Público | Estado del servidor y de la base de datos |
-| POST | `/auth/register` | Público | Crea una cuenta (Ingeniero o Estudiante) |
+| POST | `/auth/register` | Público | Crea una cuenta (Ingeniero, Estudiante o Cliente) |
+| POST | `/auth/demo` | Público | Entra a la cuenta de prueba de un rol, sin contraseña en el navegador |
 | POST | `/auth/login` | Público | Devuelve el token de sesión |
 | GET | `/auth/me` | Con token | Usuario de la sesión actual |
 | GET | `/roles` | Público | Roles disponibles |
@@ -48,11 +49,30 @@ Todas las rutas empiezan por `/api/v1`. El contrato completo que usa el frontend
 | POST, PUT, DELETE | `/building-types`, `/element-types`, `/materials` | Administrador | Editar catálogos |
 | GET | `/ai-models` | Público | Modelos de IA disponibles |
 | PUT | `/ai-models/{id}` | Administrador | Activar un modelo o elegir el predeterminado |
+| GET, POST | `/projects/{id}/members` | Con token | Ver y compartir un proyecto (solo el dueño agrega) |
+| DELETE | `/projects/{id}/members/{userId}` | Con token | Dejar de compartir |
+| POST | `/analyses/{id}/review` | Dueño o Revisor | Marca el análisis como revisado; el servidor guarda quién y cuándo en el resumen del análisis |
 | POST | `/analyses/{id}/copilot` | Con token | Pregunta al copiloto de ingeniería sobre el análisis (límite diario por usuario) |
 | POST | `/analyses/{id}/render` | Con token | Render con IA desde una captura del visor 3D (límite diario por usuario) |
 | GET | `/ai/capabilities` | Con token | Qué funciones de IA están activas y cuántas consultas le quedan hoy al usuario |
 
 Los errores responden con el código HTTP adecuado y un cuerpo `{ "message": "..." }` en español.
+
+## Roles
+
+| Rol | Qué puede hacer |
+|---|---|
+| Administrador | Todo: usuarios, catálogos, modelos de IA y cualquier proyecto |
+| Ingeniero | Sus proyectos, sin límite, y compartirlos |
+| Revisor | Ve y valida todos los proyectos; no crea, no cambia, no borra |
+| Cliente | Solo ve los proyectos que le comparten |
+| Estudiante | Sus proyectos, máximo 3 |
+
+Las reglas viven en `security/policy` (patrón Strategy): una política por rol.
+
+### Cuentas de prueba
+
+Hay una por rol: `admin.prueba@`, `ingeniero@`, `revisor@`, `cliente@` y `estudiante@renderia.co`. Se entra con los botones "Usar" del login, que llaman a `/auth/demo`, así que ninguna contraseña viaja al navegador. Cada vez que el servidor arranca, sus contraseñas se cambian por unas aleatorias que solo quedan guardadas como hash BCrypt: nadie las conoce y las contraseñas que se publicaron antes dejan de servir. El administrador de prueba ve todo el panel, pero no puede cambiar usuarios, catálogos, modelos de IA ni proyectos ajenos. El cliente de prueba ve el primer proyecto del ingeniero de prueba. Se apagan con `DEMO_ACCOUNTS=false`.
 
 ## Patrones de diseño
 
@@ -90,7 +110,7 @@ Ninguna clave se guarda en el repositorio. En Render se configuran estas variabl
 | `JWT_EXPIRATION_HOURS` | Duración de la sesión (por defecto 12) |
 | `AI_SERVICE_URL`, `AI_API_KEY` | Dirección del servicio de IA y la clave compartida con él |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Crean la primera cuenta de administrador al arrancar |
-| `DEMO_ENGINEER_PASSWORD`, `DEMO_STUDENT_PASSWORD` | Crean las cuentas de prueba `ingeniero@renderia.co` y `estudiante@renderia.co` (opcional). Si una cuenta de prueba no tiene proyectos, al arrancar se le crean proyectos de ejemplo con el plano de la casa listo para analizar |
+| `DEMO_ACCOUNTS` | `true` por defecto: crea las cinco cuentas de prueba y les pone contraseñas aleatorias en cada arranque. Si el ingeniero o el estudiante de prueba no tienen proyectos, se les crean proyectos de ejemplo con el plano de la casa |
 | `COPILOT_DAILY_LIMIT`, `COPILOT_DAILY_LIMIT_STUDENT`, `RENDER_DAILY_LIMIT` | Preguntas al copiloto y renders con IA por usuario y por día (por defecto 60, 20 y 5) |
 | `FRONTEND_URL` | Dominios con permiso CORS (opcional; por defecto Vercel y `localhost:5173`) |
 

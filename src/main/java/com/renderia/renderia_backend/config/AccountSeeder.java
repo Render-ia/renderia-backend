@@ -52,4 +52,21 @@ public class AccountSeeder {
             log.warn("No se pudo crear la cuenta {}: {}", email, e.getMessage());
         }
     }
+
+    /**
+     * Demo accounts: created if missing, and on every start their password is
+     * replaced by a new random one that is never stored in clear or logged. So a
+     * password published in the past stops working, and the only way in is /auth/demo.
+     */
+    public void ensureDemoAccount(String email, String fullName, String roleName, String randomPassword) {
+        try {
+            String normalizedEmail = email.trim().toLowerCase();
+            users.findByEmailIgnoreCase(normalizedEmail).ifPresentOrElse(user -> {
+                user.setPasswordHash(passwordEncoder.encode(randomPassword));
+                users.save(user);
+            }, () -> createIfMissing(normalizedEmail, fullName, roleName, randomPassword));
+        } catch (RuntimeException e) {
+            log.warn("No se pudo preparar la cuenta de prueba {}: {}", email, e.getMessage());
+        }
+    }
 }

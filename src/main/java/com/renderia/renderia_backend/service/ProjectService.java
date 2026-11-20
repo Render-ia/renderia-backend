@@ -12,6 +12,7 @@ import com.renderia.renderia_backend.dto.ProjectResponse;
 import com.renderia.renderia_backend.exception.ApiException;
 import com.renderia.renderia_backend.model.Project;
 import com.renderia.renderia_backend.repository.BuildingTypeRepository;
+import com.renderia.renderia_backend.repository.ProjectMemberRepository;
 import com.renderia.renderia_backend.repository.ProjectRepository;
 import com.renderia.renderia_backend.security.CurrentUser;
 import com.renderia.renderia_backend.security.policy.RolePolicy;
@@ -26,12 +27,15 @@ public class ProjectService {
     private final ProjectRepository projects;
     private final BuildingTypeRepository buildingTypes;
 
-    public ProjectService(ProjectRepository projects, BuildingTypeRepository buildingTypes) {
+    private final ProjectMemberRepository members;
+
+    public ProjectService(ProjectRepository projects, BuildingTypeRepository buildingTypes, ProjectMemberRepository members) {
         this.projects = projects;
         this.buildingTypes = buildingTypes;
+        this.members = members;
     }
 
-    /** Sin userId: todos (solo quien puede ver todo) o los propios. Con userId: los de ese usuario. */
+    /** Sin userId: todos (solo quien puede ver todo) o los propios y compartidos. Con userId: los de ese usuario. */
     @Transactional(readOnly = true)
     public List<ProjectResponse> list(CurrentUser user, Long userId) {
         RolePolicy policy = user.policy();
@@ -39,7 +43,7 @@ public class ProjectService {
         if (userId == null) {
             result = policy.canViewAllProjects()
                     ? projects.findAllByOrderByCreatedAtDesc()
-                    : projects.findAllByUserIdOrderByCreatedAtDesc(user.id());
+                    : projects.findAccessible(user.id());
         } else {
             if (!userId.equals(user.id()) && !policy.canViewAllProjects()) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "Solo puedes ver tus propios proyectos.");
@@ -57,6 +61,9 @@ public class ProjectService {
     @Transactional
     public ProjectResponse create(CurrentUser user, ProjectRequest request) {
         int limit = user.policy().projectLimit();
+        if (limit <= 0) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "Tu rol no permite crear proyectos.");
+        }
         if (projects.countByUserId(user.id()) >= limit) {
             throw new ApiException(HttpStatus.FORBIDDEN,
                     "Tu rol permite máximo " + limit + " proyectos. Elimina uno para crear otro.");
@@ -83,16 +90,26 @@ public class ProjectService {
     public Project findVisible(CurrentUser user, Long id) {
         Project project = projects.findById(id)
                 .orElseThrow(() -> ApiException.notFound("El proyecto no existe o no tienes acceso a él."));
-        if (!project.getUserId().equals(user.id()) && !user.policy().canViewAllProjects()) {
+        if (!canSee(user, project)) {
             throw ApiException.notFound("El proyecto no existe o no tienes acceso a él.");
         }
         return project;
     }
 
-    /** Proyecto que el usuario puede modificar: el suyo, o cualquiera si su rol lo permite. */
+    /** Owner, a role that sees everything, or a user the project was shared with. */
+    public boolean canSee(CurrentUser user, Project project) {
+        return project.getUserId().equals(user.id())
+                || user.policy().canViewAllProjects()
+                || members.existsByProjectIdAndUserId(project.getId(), user.id());
+    }
+
+    /**
+     * Project the user can change: their own, or any if the role allows it.
+     * Demo accounts only change their own projects, so the demo administrator cannot damage real data.
+     */
     public Project findManageable(CurrentUser user, Long id) {
         Project project = findVisible(user, id);
-        if (!project.getUserId().equals(user.id()) && !user.policy().canManageAnyProject()) {
+        if (!project.getUserId().equals(user.id()) && (!user.policy().canManageAnyProject() || user.demo())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Solo el dueño del proyecto puede modificarlo.");
         }
         return project;

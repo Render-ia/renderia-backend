@@ -5,7 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Rol de usuario: Administrador, Ingeniero o Estudiante. */
+/** Rol de usuario: Administrador, Ingeniero, Estudiante, Revisor o Cliente. */
 @Entity
 @Table(name = "roles")
 public class Role {
@@ -13,6 +13,8 @@ public class Role {
     public static final String ADMIN = "Administrador";
     public static final String ENGINEER = "Ingeniero";
     public static final String STUDENT = "Estudiante";
+    public static final String REVIEWER = "Revisor";
+    public static final String CLIENT = "Cliente";
 
     @Id
     private Long id;

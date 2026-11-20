@@ -12,12 +12,13 @@ public interface AiAnalysisRepository extends JpaRepository<AiAnalysis, Long> {
 
     List<AiAnalysis> findAllByOrderByCreatedAtDesc();
 
-    /** Análisis de los planos de los proyectos de un usuario. */
+    /** Análisis de los planos de los proyectos de un usuario o compartidos con él. */
     @Query("""
             SELECT a FROM AiAnalysis a
             WHERE a.floorPlanId IN (
                 SELECT f.id FROM FloorPlan f WHERE f.projectId IN (
-                    SELECT p.id FROM Project p WHERE p.userId = :userId))
+                    SELECT p.id FROM Project p WHERE p.userId = :userId
+                    OR p.id IN (SELECT m.projectId FROM ProjectMember m WHERE m.userId = :userId)))
             ORDER BY a.createdAt DESC
             """)
     List<AiAnalysis> findAllOfUser(@Param("userId") Long userId);

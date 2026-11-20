@@ -16,7 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import com.renderia.renderia_backend.config.DemoAccountsInitializer;
+import com.renderia.renderia_backend.security.DemoAccounts;
 import com.renderia.renderia_backend.dto.AuthResponse;
 import com.renderia.renderia_backend.dto.DemoLoginRequest;
 import com.renderia.renderia_backend.dto.LoginRequest;
@@ -116,13 +116,13 @@ class AuthServiceTests {
     }
 
     @Test
-    void demoLoginOnlyWorksForEngineerAndStudent() {
-        User engineer = TestUsers.user(7L, Role.ENGINEER, true);
-        when(users.findByEmailIgnoreCase(DemoAccountsInitializer.ENGINEER_EMAIL)).thenReturn(Optional.of(engineer));
+    void demoLoginWorksForEveryRoleWithoutAPassword() {
+        User reviewer = TestUsers.user(7L, Role.REVIEWER, true);
+        when(users.findByEmailIgnoreCase(DemoAccounts.emailOf(Role.REVIEWER))).thenReturn(Optional.of(reviewer));
 
-        assertEquals("token-de-prueba", service.demoLogin(new DemoLoginRequest(Role.ENGINEER)).token());
+        assertEquals("token-de-prueba", service.demoLogin(new DemoLoginRequest(Role.REVIEWER)).token());
         assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ApiException.class,
-                () -> service.demoLogin(new DemoLoginRequest(Role.ADMIN))).getStatus());
+                () -> service.demoLogin(new DemoLoginRequest("Superusuario"))).getStatus());
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(ApiException.class,
                 () -> service.demoLogin(new DemoLoginRequest(Role.STUDENT))).getStatus());
     }
