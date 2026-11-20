@@ -1,5 +1,6 @@
 package com.renderia.renderia_backend.service;
 
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -21,6 +22,7 @@ import com.renderia.renderia_backend.model.User;
 import com.renderia.renderia_backend.repository.RoleRepository;
 import com.renderia.renderia_backend.repository.UserRepository;
 import com.renderia.renderia_backend.security.JwtService;
+import com.renderia.renderia_backend.security.ratelimit.AuthRateLimiter;
 
 /** Registro, inicio de sesión y consulta del usuario actual. */
 @Service
@@ -36,17 +38,26 @@ public class AuthService {
     private final RoleRepository roles;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuthRateLimiter rateLimiter;
+    /**
+     * Hash de una contraseña aleatoria. Cuando el correo no existe se compara contra
+     * este hash para que la respuesta tarde lo mismo y no delate qué correos están registrados.
+     */
+    private final String dummyHash;
 
     public AuthService(UserRepository users, RoleRepository roles,
-                       PasswordEncoder passwordEncoder, JwtService jwtService) {
+                       PasswordEncoder passwordEncoder, JwtService jwtService, AuthRateLimiter rateLimiter) {
         this.users = users;
         this.roles = roles;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.rateLimiter = rateLimiter;
+        this.dummyHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
     }
 
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, String clientIp) {
+        rateLimiter.checkRegister(clientIp);
         if (request == null) {
             throw ApiException.badRequest("Envía los datos del registro.");
         }
@@ -74,18 +85,26 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRole(role);
         users.save(user);
+        rateLimiter.registered(clientIp);
 
         return new AuthResponse(jwtService.generateToken(user), UserResponse.from(user));
     }
 
     @Transactional(readOnly = true)
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String clientIp) {
         String email = normalizeEmail(request == null ? null : request.email());
         String password = request == null ? null : request.password();
+        rateLimiter.checkLogin(email, clientIp);
 
-        User user = users.findByEmailIgnoreCase(email)
-                .filter(u -> password != null && passwordEncoder.matches(password, u.getPasswordHash()))
-                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Correo o contraseña incorrectos."));
+        Optional<User> found = users.findByEmailIgnoreCase(email);
+        String hash = found.map(User::getPasswordHash).orElse(dummyHash);
+        boolean matches = password != null && passwordEncoder.matches(password, hash);
+        if (found.isEmpty() || !matches) {
+            rateLimiter.loginFailed(email, clientIp);
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "Correo o contraseña incorrectos.");
+        }
+        rateLimiter.loginSucceeded(email);
+        User user = found.get();
         if (!user.isActive()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "Tu cuenta está desactivada. Contacta al administrador.");
         }

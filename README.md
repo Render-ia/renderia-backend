@@ -83,10 +83,27 @@ Ninguna clave se guarda en el repositorio. En Render se configuran estas variabl
 |---|---|
 | `DB_URL` | Conexión JDBC a Neon (`jdbc:postgresql://.../neondb?sslmode=require`) |
 | `DB_USERNAME`, `DB_PASSWORD` | Credenciales de la base de datos |
-| `JWT_SECRET` | Clave para firmar los tokens (mínimo 32 caracteres) |
+| `JWT_SECRET` | Clave para firmar los tokens. **Obligatoria en producción** (mínimo 32 caracteres; genera una con `openssl rand -base64 48`). Si falta en Render, el backend no arranca |
+| `JWT_EXPIRATION_HOURS` | Duración de la sesión (por defecto 12) |
+| `AI_SERVICE_URL`, `AI_API_KEY` | Dirección del servicio de IA y la clave compartida con él |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Crean la primera cuenta de administrador al arrancar |
 | `DEMO_ENGINEER_PASSWORD`, `DEMO_STUDENT_PASSWORD` | Crean las cuentas de prueba `ingeniero@renderia.co` y `estudiante@renderia.co` (opcional). Si una cuenta de prueba no tiene proyectos, al arrancar se le crean proyectos de ejemplo con el plano de la casa listo para analizar |
 | `FRONTEND_URL` | Dominios con permiso CORS (opcional; por defecto Vercel y `localhost:5173`) |
+
+La lista completa, con ejemplos falsos, está en [`.env.example`](.env.example).
+
+## Seguridad
+
+| Riesgo | Medida |
+|---|---|
+| Clave JWT conocida | No hay valor por defecto. En producción (`RENDER=true`) el arranque falla sin `JWT_SECRET`; la clave que estuvo publicada en el repo se rechaza siempre |
+| Fuerza bruta en login | 5 intentos fallidos por correo y 30 por IP cada 15 minutos; después responde `429` con `Retry-After` |
+| Registro masivo | 10 cuentas nuevas por IP cada hora |
+| Enumerar correos | Si el correo no existe igual se compara un hash BCrypt, así la respuesta tarda lo mismo |
+| Imágenes de planos por id | La imagen solo se entrega con un enlace firmado (HMAC-SHA256) que vence en menos de 48 horas |
+| Fugas en errores 500 | El cliente recibe un código de referencia; el detalle queda solo en el log |
+| SVG con scripts | La imagen se sirve con `Content-Security-Policy: sandbox` y `nosniff` |
+| Cabeceras | HSTS, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` |
 
 ## Cómo ejecutarlo
 

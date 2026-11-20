@@ -45,7 +45,7 @@ public class AiAnalyzeService {
         AiModel model = analyses.requireActiveModel(request.aiModelId());
         String scale = request.scale() == null || request.scale().isBlank() ? plan.getScale() : request.scale().trim();
 
-        AiServiceResponse result = aiService.analyze(plan.getFileUrl(), scale, model.getProvider(),
+        AiServiceResponse result = aiService.analyze(floorPlans.imageUrl(plan), scale, model.getProvider(),
                 model.getModelIdentifier());
 
         Map<String, Object> summary = new LinkedHashMap<>();
