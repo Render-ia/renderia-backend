@@ -1,5 +1,7 @@
 package com.renderia.renderia_backend.exception;
 
+import com.renderia.renderia_backend.config.RequestSizeFilter;
+
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,6 +39,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, String>> handleUnreadable(HttpMessageNotReadableException e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof RequestSizeFilter.BodyTooLargeException) {
+                return message(HttpStatus.CONTENT_TOO_LARGE, "La petición es demasiado grande.");
+            }
+        }
         return message(HttpStatus.BAD_REQUEST, "El cuerpo de la petición no es válido.");
     }
 
