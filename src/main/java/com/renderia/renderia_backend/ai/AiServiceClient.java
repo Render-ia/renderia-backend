@@ -43,8 +43,8 @@ public class AiServiceClient {
     public AiServiceClient(@Value("${app.ai.url}") String url, @Value("${app.ai.api-key}") String apiKey) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(30_000);
-        // En el plan gratis el servicio puede tardar en despertar.
-        factory.setReadTimeout(120_000);
+        // Gemini can take up to ~2 minutes on a large plan; the free plan can also be slow to wake up.
+        factory.setReadTimeout(180_000);
         this.client = RestClient.builder()
                 .baseUrl(normalizeUrl(url))
                 .requestFactory(factory)
