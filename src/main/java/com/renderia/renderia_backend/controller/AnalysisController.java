@@ -18,10 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.renderia.renderia_backend.dto.AnalysisCreateRequest;
 import com.renderia.renderia_backend.dto.AnalysisResponse;
+import com.renderia.renderia_backend.dto.AnalysisRunRequest;
 import com.renderia.renderia_backend.dto.AnalysisUpdateRequest;
 import com.renderia.renderia_backend.dto.ElementInput;
 import com.renderia.renderia_backend.dto.ElementResponse;
+import com.renderia.renderia_backend.exception.ApiException;
 import com.renderia.renderia_backend.security.CurrentUser;
+import com.renderia.renderia_backend.service.AnalysisPipelineService;
 import com.renderia.renderia_backend.service.AnalysisService;
 
 @RestController
@@ -29,9 +32,11 @@ import com.renderia.renderia_backend.service.AnalysisService;
 public class AnalysisController {
 
     private final AnalysisService service;
+    private final AnalysisPipelineService pipeline;
 
-    public AnalysisController(AnalysisService service) {
+    public AnalysisController(AnalysisService service, AnalysisPipelineService pipeline) {
         this.service = service;
+        this.pipeline = pipeline;
     }
 
     @GetMapping("/analyses")
@@ -49,6 +54,28 @@ public class AnalysisController {
                                                    @RequestBody AnalysisCreateRequest request) {
         AnalysisResponse analysis = service.create(CurrentUser.from(jwt), request.floorPlanId(), request.aiModelId());
         return ResponseEntity.status(HttpStatus.CREATED).body(analysis);
+    }
+
+    /**
+     * Ciclo completo en el backend: crea el análisis, llama al servicio de IA, guarda los
+     * elementos y el modelo 3D y deja el análisis en COMPLETED (o FAILED con el motivo).
+     */
+    @PostMapping("/analyses/run")
+    public ResponseEntity<AnalysisResponse> createAndRun(@AuthenticationPrincipal Jwt jwt,
+                                                         @RequestBody AnalysisRunRequest request) {
+        if (request == null) {
+            throw ApiException.badRequest("Elige el plano y el modelo de IA.");
+        }
+        AnalysisResponse analysis = pipeline.createAndRun(CurrentUser.from(jwt), request.floorPlanId(),
+                request.aiModelId(), request.scale());
+        return ResponseEntity.status(HttpStatus.CREATED).body(analysis);
+    }
+
+    /** Corre (o reintenta) el ciclo completo de un análisis que ya existe. */
+    @PostMapping("/analyses/{id}/run")
+    public AnalysisResponse run(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+                                @RequestBody(required = false) AnalysisRunRequest request) {
+        return pipeline.run(CurrentUser.from(jwt), id, request == null ? null : request.scale());
     }
 
     @PutMapping("/analyses/{id}")
