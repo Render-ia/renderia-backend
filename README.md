@@ -36,6 +36,21 @@ El usuario usa el frontend, el frontend llama a esta API, la API guarda y lee en
 
 Todas las rutas empiezan por `/api/v1`. El contrato completo que usa el frontend está en [`docs/API.md`](https://github.com/Render-ia/renderia-frontend/blob/main/docs/API.md).
 
+**Documentación interactiva (Swagger):** [`/swagger-ui.html`](https://renderia-backend.onrender.com/swagger-ui.html) · definición OpenAPI en [`/v3/api-docs`](https://renderia-backend.onrender.com/v3/api-docs). Para probar un endpoint protegido: `POST /auth/demo` (o `/auth/login`), copiar el `token` y pegarlo en **Authorize**.
+
+### Ciclo completo en una llamada
+
+`POST /analyses/run` con `{ "floorPlanId": 1, "aiModelId": 1 }` hace todo el recorrido dentro del backend:
+
+```
+usuario → frontend → backend ─┬─ BD: crea el análisis (PENDING → PROCESSING)
+                              ├─ IA: renderia-ai /analyze (fuera de transacción)
+                              ├─ BD: guarda structural_elements + models_3d (COMPLETED)
+                              └─ responde al frontend → visor 3D
+```
+
+Si la IA falla, el análisis queda en `FAILED` con el motivo (nunca atascado en `PROCESSING`), aunque el usuario cierre el navegador. `POST /analyses/{id}/run` reintenta uno en `FAILED`.
+
 | Método | Ruta | Acceso | Descripción |
 |---|---|---|---|
 | GET | `/hello` | Público | Nombre del proyecto e integrantes |
@@ -51,6 +66,8 @@ Todas las rutas empiezan por `/api/v1`. El contrato completo que usa el frontend
 | PUT | `/ai-models/{id}` | Administrador | Activar un modelo o elegir el predeterminado |
 | GET, POST | `/projects/{id}/members` | Con token | Ver y compartir un proyecto (solo el dueño agrega) |
 | DELETE | `/projects/{id}/members/{userId}` | Con token | Dejar de compartir |
+| POST | `/analyses/run` | Con token | **Ciclo completo:** crea el análisis, llama a la IA, guarda elementos y modelo 3D |
+| POST | `/analyses/{id}/run` | Con token | Corre o reintenta (si está en FAILED) el ciclo completo de un análisis |
 | POST | `/analyses/{id}/review` | Dueño o Revisor | Marca el análisis como revisado; el servidor guarda quién y cuándo en el resumen del análisis |
 | POST | `/analyses/{id}/copilot` | Con token | Pregunta al copiloto de ingeniería sobre el análisis (límite diario por usuario) |
 | POST | `/analyses/{id}/render` | Con token | Render con IA desde una captura del visor 3D (límite diario por usuario) |
@@ -82,6 +99,9 @@ Hay una por rol: `admin.prueba@`, `ingeniero@`, `revisor@`, `cliente@` y `estudi
 | **Singleton** | Servicios y configuración (`@Service`, `@Configuration`) | Spring crea una sola instancia de cada uno y la comparte |
 | **Repository** | `repository/*` | Separa el acceso a datos de la lógica de negocio |
 | **DTO** | `dto/*` | Lo que viaja por la API no expone las entidades (por ejemplo, nunca sale la contraseña) |
+| **Facade** | `AnalysisPipelineService` | `run()` es el único punto de entrada del ciclo completo: coordina permisos, plano, servicio de IA, elementos, modelo 3D y bitácora |
+| **State** | `AnalysisStatus` | Cada estado sabe a cuáles puede pasar (PENDING → PROCESSING → COMPLETED/FAILED, FAILED → PENDING) |
+| **Strategy** | `security/policy/*` | Una política por rol decide qué puede hacer cada usuario |
 | **Facade** | `AuthService`, `CopilotService` | Una sola llamada esconde validar, cifrar, guardar y generar el token; el copiloto revisa acceso y cupo, arma el contexto desde la base de datos y llama al servicio de IA |
 
 ## Estructura
