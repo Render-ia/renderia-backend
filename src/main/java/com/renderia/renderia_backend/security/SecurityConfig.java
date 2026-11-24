@@ -36,7 +36,8 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Reglas de acceso de la API:
- * - Públicas: hello, health, login, registro, acceso a las cuentas de prueba y la lectura de catálogos.
+ * - Públicas: hello, health, login, registro, acceso a las cuentas de prueba, la lectura de catálogos
+ *   y la documentación de la API (Swagger UI); probar un endpoint protegido en Swagger sigue pidiendo token.
  * - Imágenes de planos: sin token, pero solo con el enlace firmado que entrega la API.
  * - Solo administrador: crear, editar o borrar catálogos y modelos de IA, y gestionar usuarios.
  * - Todo lo demás exige un token válido (Authorization: Bearer ...).
@@ -64,6 +65,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/api/v1/hello", "/api/v1/health").permitAll()
+                .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/demo").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/roles").permitAll()
                 .requestMatchers(HttpMethod.GET, CATALOGS).permitAll()
